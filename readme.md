@@ -1,7 +1,7 @@
 # Blazor Clean Architecture Setup Script
 
 ## Overview
-This script automates the setup of a Blazor WebAssembly project following Clean Architecture principles. It takes care of generating the project structure, adding the necessary NuGet packages, and setting up solution references. Additionally, the script comes with a built-in demo CRUD application. This CRUD app is fully functional and auto-generates all the required code, making it a comprehensive example for developers to get started.
+This script automates the setup of a Blazor WebAssembly project following Clean Architecture principles, using Jason Taylor CA template as a base. It takes care of generating the project structure, adding the necessary NuGet packages, and setting up solution references. Additionally, the script comes with a built-in demo CRUD application. This CRUD app is fully functional and auto-generates all the required code, making it a comprehensive example for developers to get started.
 
 ## Prerequisites
 - .NET SDK 7.0 or higher
