@@ -98,6 +98,8 @@ function UpdateServerProgramCs()
 using $($projectName).Server.Services;
 using $($projectName).Application.Common.Interfaces;
 using $($projectName).Infrastructure.Persistence;
+using $($projectName).Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
