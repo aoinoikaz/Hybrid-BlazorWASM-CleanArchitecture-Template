@@ -44,15 +44,6 @@ function UpdateApiExceptionFilterAttributeNamespace
 }
 
 
-function RemoveMicrosoftIdentityWebApiForB2C 
-{
-    $filePath = "src\$projectName\Server\Program.cs"
-    $content = Get-Content -Path $filePath -Raw
-    $modifiedContent = $content -replace '\s*\.AddMicrosoftIdentityWebApi\(builder\.Configuration\.GetSection\("AzureAdB2C"\)\);', ''
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
 function UpdateAppSettingsJson()
 {
 	if ($databaseType -eq "sql") 
@@ -100,42 +91,64 @@ function UpdateAppSettingsJson()
 }
 
 
-
-function UpdateServerProgramCs 
+function UpdateServerProgramCs() 
 {
-    $programPath = "src\$projectName\Server\Program.cs"
-    $programContent = Get-Content -Path $programPath
+    $filePath = "src\$($projectName)\Server\Program.cs"
+    $content = @"
+using $($projectName).Server.Services;
+using $($projectName).Application.Common.Interfaces;
+using $($projectName).Infrastructure.Persistence;
 
-    # Lines to add under the 'using' section
-    $newUsings = @("using $projectName.Application.Common.Interfaces;", "using $projectName.Server.Services;")
-    
-    $linesToRemove = @(
-        "// Add services to the container.",
-        "builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)",
-        "app.UseAuthorization();",
-        "    .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection(`"AzureAd`"));"
-    )
+var builder = WebApplication.CreateBuilder(args);
 
-    # Remove unwanted lines
-    $filteredContent = $programContent | Where-Object { $_ -notin $linesToRemove }
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddApplicationServices();
+builder.Services.AddInfrastructureServices(builder.Configuration);
 
-    # Add the new 'using' statements if they don't already exist
-    foreach ($newUsing in $newUsings) 
-	{
-        if ($filteredContent -notcontains $newUsing) 
-		{
-            $filteredContent = @($newUsing) + $filteredContent
-        } 
-    }
+builder.Services.AddControllersWithViews();
+builder.Services.AddRazorPages();
 
-    # Modify builder lines
-    $insertLines = "builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();`r`nbuilder.Services.AddApplicationServices();`r`nbuilder.Services.AddInfrastructureServices(builder.Configuration);"
-    $filteredContent = $filteredContent -replace '(var builder = WebApplication\.CreateBuilder\(args\);)', ('$1' + "`r`n" + $insertLines)
+var app = builder.Build();
 
-    # Save the new content
-    $filteredContent -join [System.Environment]::NewLine | Set-Content -Path $programPath
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseWebAssemblyDebugging();
+
+   using (var scope = app.Services.CreateScope())
+   {
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<ApplicationDbContextInitialiser>>();
+
+        var initialiser = new ApplicationDbContextInitialiser(logger, context, userManager, roleManager);
+        await initialiser.InitialiseAsync();
+        await initialiser.SeedAsync();
+   }
+}
+else
+{
+    app.UseExceptionHandler("/Error");
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
 }
 
+app.UseHttpsRedirection();
+
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.MapRazorPages();
+app.MapControllers();
+app.MapFallbackToFile("index.html");
+
+app.Run();
+"@
+    Set-Content -Path $filePath -Value $content
+}
 
 
 function UpdateClientProgramCs() 
@@ -1223,7 +1236,6 @@ function CreateCategoryEnum()
 {
     $filePath = "src\Domain\Enums\Category.cs"
     $content = @"
-
 namespace $($projectName).Domain.Enums;
 
 public enum Category
@@ -1506,17 +1518,72 @@ public class ApplicationDbContextInitialiser
             }
         }
 
-        // Default data
+       // Default data
         // Seed, if necessary
         if (!_context.Products.Any())
         {
             _context.Products.AddRange(new List<Product>()
             {
-                new Product() { Name = "GTA 5", Price = 89.99m },
-                new Product() { Name = "GTA 6",  Price = 149.99m },
-                new Product() { Name = "Black Ops 3", Price = 79.99m },
-                new Product() { Name = "Modern Warfare 3", Price = 99.99m },
-                new Product() { Name = "Elden Ring", Price = 9.99m },
+                new Product()
+                {
+                    Name = "GTA 5",
+                    Description = "Grand Theft Auto V is an action-adventure game developed by Rockstar North.",
+                    Price = 89.99m,
+                    StockQuantity = 100,
+                    SKU = "GTA5-12345",
+                    Category = "Video Games",
+                    Brand = "Rockstar Games",
+                    ReleaseDate = new DateTime(2013, 9, 17),
+                    ImageUrl = "/path/to/gta5.jpg"
+                },
+                new Product()
+                {
+                    Name = "GTA 6",
+                    Description = "Grand Theft Auto VI is the latest installment in the popular action-adventure series.",
+                    Price = 149.99m,
+                    StockQuantity = 50,
+                    SKU = "GTA6-12345",
+                    Category = "Video Games",
+                    Brand = "Rockstar Games",
+                    ReleaseDate = new DateTime(2023, 9, 17), // Assuming a future release date
+                    ImageUrl = "/path/to/gta6.jpg"
+                },
+                new Product()
+                {
+                    Name = "Black Ops 3",
+                    Description = "Call of Duty: Black Ops III is a military science fiction first-person shooter.",
+                    Price = 79.99m,
+                    StockQuantity = 30,
+                    SKU = "BO3-12345",
+                    Category = "Video Games",
+                    Brand = "Activision",
+                    ReleaseDate = new DateTime(2015, 11, 6),
+                    ImageUrl = "/path/to/blackops3.jpg"
+                },
+                new Product()
+                {
+                    Name = "Modern Warfare 3",
+                    Description = "Call of Duty: Modern Warfare 3 is a first-person shooter game.",
+                    Price = 99.99m,
+                    StockQuantity = 40,
+                    SKU = "MW3-12345",
+                    Category = "Video Games",
+                    Brand = "Activision",
+                    ReleaseDate = new DateTime(2011, 11, 8),
+                    ImageUrl = "/path/to/mw3.jpg"
+                },
+                new Product()
+                {
+                    Name = "Elden Ring",
+                    Description = "Elden Ring is an action role-playing game developed by FromSoftware.",
+                    Price = 9.99m,
+                    StockQuantity = 200,
+                    SKU = "ER-12345",
+                    Category = "Video Games",
+                    Brand = "FromSoftware",
+                    ReleaseDate = new DateTime(2022, 2, 25),
+                    ImageUrl = "/path/to/eldenring.jpg"
+                },
             });
 
             await _context.SaveChangesAsync();
@@ -1566,8 +1633,6 @@ function CreateProductPage()
 
         if (Model != null)
         {
-            Console.WriteLine("Product isn't null: " + Model.Name + " | " + Model.Price);
-
             try
             {
                 response = await ProductApi.CreateProductAsync(Model);
@@ -1805,8 +1870,11 @@ else
             var result = await ProductApi.DeleteProductAsync(productId);
             if (result.Succeeded)
             {
-                products = products.Where(p => p.Id != productId).ToList();
-                StateHasChanged();
+                if (products != null)
+                {
+                    products = products.Where(p => p.Id != productId).ToList();
+                    StateHasChanged();
+                }
             }
             else
             {
@@ -1832,7 +1900,7 @@ Function UpdateNavMenuPage()
 	$newContent = @"
 	<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">DashboardV2</a>
+        <a class="navbar-brand" href="">$($projectName)</a>
         <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -1871,7 +1939,6 @@ Function UpdateNavMenuPage()
 }
 
 
-
 UpdateAppSettingsJson
 UpdateServerProgramCs
 UpdateClientProgramCs
@@ -1882,7 +1949,6 @@ UpdateControllerNamespaces
 UpdateApiControllerBaseUsingStatement
 UpdateApiExceptionFilterAttributeNamespace
 
-RemoveMicrosoftIdentityWebApiForB2C
 CreateIProductApi
 CreateResultClass
 CreateProductDtoClass
