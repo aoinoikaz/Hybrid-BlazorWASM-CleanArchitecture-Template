@@ -105,16 +105,27 @@ rmdir /s /q WeatherForecasts
 
 cd ../
 
+
+
+
 del "Domain\Events\*.*" /Q
 del "Domain\Entities\TodoItem.cs" /Q
 del "Domain\Entities\TodoList.cs" /Q
+del "Domain\Enums\PriorityLevel.cs" /Q
+del "Application\Common\Models\LookupDto.cs" /Q
+del "Shared\Class1.cs" /Q
 del "Infrastructure\Persistence\Configurations\TodoListConfiguration.cs" /Q
 del "Infrastructure\Persistence\Configurations\TodoItemConfiguration.cs" /Q
+del "Infrastructure\Files\Maps\TodoItemRecordMap.cs" /Q
 del "%PROJECT_NAME%\Server\Controllers\TodoItemsController.cs" /Q
 del "%PROJECT_NAME%\Server\Controllers\TodoListsController.cs" /Q
 del "%PROJECT_NAME%\Server\Controllers\WeatherForecastController.cs" /Q
 del "%PROJECT_NAME%\Client\Pages\FetchData.razor" /Q
 del "%PROJECT_NAME%\Client\Pages\Counter.razor" /Q
+
+:: del lookupdto / add productlistingdto
+:: del prioritylevel / add category
+:: update product entity/dto 
 
 
 

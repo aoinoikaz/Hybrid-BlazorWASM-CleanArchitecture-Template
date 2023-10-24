@@ -5,6 +5,54 @@ param (
 )
 
 
+function UpdateCurrentUserServiceNamespace 
+{
+    $filePath = "src\$projectName\Server\Services\CurrentUserService.cs"
+    $content = Get-Content -Path $filePath -Raw
+    $modifiedContent = $content -replace 'namespace .+\.WebUI\.Services;', "namespace $projectName.Server.Services;"
+    Set-Content -Path $filePath -Value $modifiedContent
+}
+
+
+function UpdateControllerNamespaces 
+{
+    $files = Get-ChildItem -Path "src\$projectName\Server\Controllers\*.cs"
+    
+    foreach ($file in $files) {
+        $content = Get-Content -Path $file.FullName -Raw
+        $modifiedContent = $content -replace 'namespace .+\.WebUI\.Controllers;', "namespace $projectName.Server.Controllers;"
+        Set-Content -Path $file.FullName -Value $modifiedContent
+    }
+}
+
+
+function UpdateApiControllerBaseUsingStatement 
+{
+    $filePath = "src\$projectName\Server\Controllers\ApiControllerBase.cs"
+    $content = Get-Content -Path $filePath -Raw
+    $modifiedContent = $content -replace 'using .+\.WebUI\.Filters;', "using $projectName.Server.Filters;"
+    Set-Content -Path $filePath -Value $modifiedContent
+}
+
+
+function UpdateApiExceptionFilterAttributeNamespace 
+{
+    $filePath = "src\$projectName\Server\Filters\ApiExceptionFilterAttribute.cs"
+    $content = Get-Content -Path $filePath -Raw
+    $modifiedContent = $content -replace 'namespace .+\.WebUI\.Filters;', "namespace $projectName.Server.Filters;"
+    Set-Content -Path $filePath -Value $modifiedContent
+}
+
+
+function RemoveMicrosoftIdentityWebApiForB2C 
+{
+    $filePath = "src\$projectName\Server\Program.cs"
+    $content = Get-Content -Path $filePath -Raw
+    $modifiedContent = $content -replace '\s*\.AddMicrosoftIdentityWebApi\(builder\.Configuration\.GetSection\("AzureAdB2C"\)\);', ''
+    Set-Content -Path $filePath -Value $modifiedContent
+}
+
+
 function UpdateAppSettingsJson()
 {
 	if ($databaseType -eq "sql") 
@@ -130,58 +178,6 @@ function UpdateClientProgramCs()
     else {
         Write-Host "File $filePath not found."
     }
-}
-
-
-function UpdateCurrentUserServiceNamespace 
-{
-    $filePath = "src\$projectName\Server\Services\CurrentUserService.cs"
-    $content = Get-Content -Path $filePath -Raw
-    $modifiedContent = $content -replace 'namespace .+\.WebUI\.Services;', "namespace $projectName.Server.Services;"
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
-
-function UpdateControllerNamespaces 
-{
-    $files = Get-ChildItem -Path "src\$projectName\Server\Controllers\*.cs"
-    
-    foreach ($file in $files) {
-        $content = Get-Content -Path $file.FullName -Raw
-        $modifiedContent = $content -replace 'namespace .+\.WebUI\.Controllers;', "namespace $projectName.Server.Controllers;"
-        Set-Content -Path $file.FullName -Value $modifiedContent
-    }
-}
-
-
-
-function UpdateApiControllerBaseUsingStatement 
-{
-    $filePath = "src\$projectName\Server\Controllers\ApiControllerBase.cs"
-    $content = Get-Content -Path $filePath -Raw
-    $modifiedContent = $content -replace 'using .+\.WebUI\.Filters;', "using $projectName.Server.Filters;"
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
-
-function UpdateApiExceptionFilterAttributeNamespace 
-{
-    $filePath = "src\$projectName\Server\Filters\ApiExceptionFilterAttribute.cs"
-    $content = Get-Content -Path $filePath -Raw
-    $modifiedContent = $content -replace 'namespace .+\.WebUI\.Filters;', "namespace $projectName.Server.Filters;"
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
-
-function RemoveMicrosoftIdentityWebApiForB2C 
-{
-    $filePath = "src\$projectName\Server\Program.cs"
-    $content = Get-Content -Path $filePath -Raw
-    $modifiedContent = $content -replace '\s*\.AddMicrosoftIdentityWebApi\(builder\.Configuration\.GetSection\("AzureAdB2C"\)\);', ''
-    Set-Content -Path $filePath -Value $modifiedContent
 }
 
 
@@ -405,13 +401,64 @@ namespace $($projectName).Shared.DTOs;
 
 public class ProductDto
 {
-	public ProductDto()
-	{ 
-	}
+    public int Id { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public decimal Price { get; set; }
+    public int StockQuantity { get; set; }
+    public string? SKU { get; set; }
+    public bool IsAvailable { get; set; }
+    public Category Category { get; set; }
+    public string? Brand { get; set; }
+    public DateTime? ReleaseDate { get; set; }
+    public string? ImageUrl { get; set; }
+}
+"@
+    New-Item -Path $filePath -ItemType File
+    Set-Content -Path $filePath -Value $content
+}
 
-	public int Id { get; set; }
-	public string? Name { get; set; }
-	public decimal Price { get; set; }
+
+function CreateProductListingDto() 
+{
+    $directory = "src\Application\Common\Models"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "ProductListingDto.cs"
+	
+    $content = @"
+using $($projectName).Application.Common.Mappings;
+using $($projectName).Domain.Entities;
+using $($projectName).Domain.Enums;
+
+namespace $($projectName).Application.Common.Models
+{
+    public class ProductListingDto : IMapFrom<Product>
+    {
+        public int Id { get; init; }
+        public string? Name { get; init; }
+        public decimal Price { get; init; }
+        public Category Category { get; init; }
+        public string? Brand { get; init; }
+        public bool IsAvailable { get; init; }
+        public string? ImageUrl { get; init; }
+        
+        // Automapper mapping configuration
+        public void Mapping(Profile profile)
+        {
+            profile.CreateMap<Product, ProductListingDto>()
+                .ForMember(dto => dto.Name, opt => opt.MapFrom(src => src.Name))
+                .ForMember(dto => dto.Price, opt => opt.MapFrom(src => src.Price))
+                .ForMember(dto => dto.Category, opt => opt.MapFrom(src => src.Category))
+                .ForMember(dto => dto.Brand, opt => opt.MapFrom(src => src.Brand))
+                .ForMember(dto => dto.IsAvailable, opt => opt.MapFrom(src => src.IsAvailable))
+                .ForMember(dto => dto.ImageUrl, opt => opt.MapFrom(src => src.ImageUrl));
+        }
+    }
 }
 "@
     New-Item -Path $filePath -ItemType File
@@ -446,7 +493,6 @@ public class ProductCreatedEvent : BaseEvent
     New-Item -Path $filePath -ItemType File
     Set-Content -Path $filePath -Value $content
 }
-
 
 
 function CreateConfigureClientServices() 
@@ -495,7 +541,6 @@ public static class ConfigureClientServices
     New-Item -Path $filePath -ItemType File
     Set-Content -Path $filePath -Value $content
 }
-
 
 
 function CreateProductsController() 
@@ -623,7 +668,6 @@ public class ProductsController : ApiControllerBase
 
     $controllerContent | Set-Content -Path $filePath
 }
-
 
 
 function CreateProductCommandFile() 
@@ -1188,8 +1232,16 @@ using System.Threading.Tasks;
 namespace $($projectName).Domain.Entities;
 public class Product : BaseAuditableEntity
 {
-    public string? Name { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
     public decimal Price { get; set; }
+    public int StockQuantity { get; set; }
+    public string SKU { get; set; }  // Stock Keeping Unit
+    public bool IsAvailable => StockQuantity > 0;
+    public Category Category { get; set; }
+    public string Brand { get; set; }
+    public DateTime? ReleaseDate { get; set; }
+    public string ImageUrl { get; set; }
 }
 "@
 
@@ -1228,6 +1280,41 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
     Set-Content -Path $filePath -Value $content
 }
 
+
+
+function CreateProductRecordMap()
+{
+    $fullPath = "src\Infrastructure\Files\Map\ProductRecordMap.cs"
+
+	$newContent = @"
+using CsvHelper.Configuration;
+using System.Globalization;
+using $($projectName).Shared.DTOs;
+
+namespace $($projectName).Infrastructure.Files.Maps
+{
+    public class ProductRecordMap : ClassMap<ProductDto>
+    {
+        public ProductRecordMap()
+        {
+            AutoMap(CultureInfo.InvariantCulture);
+
+            Map(m => m.Name).Name("Product Name");
+            Map(m => m.Description).Name("Description");
+            Map(m => m.Price).Name("Price");
+            Map(m => m.SKU).Name("SKU");
+            Map(m => m.Category).Name("Category");
+            Map(m => m.Brand).Name("Brand");
+            Map(m => m.ReleaseDate).Name("Release Date").TypeConverterOption.Format("yyyy-MM-dd");
+            Map(m => m.ImageUrl).Name("Image URL");
+            // ... add other mappings as needed
+        }
+    }
+}
+"@
+
+	Set-Content -Path $fullPath -Value $newContent
+}
 
 
 function UpdateIApplicationDbContext()
@@ -1791,7 +1878,8 @@ CreateUpdateProductCommandValidator
 CreateProductDtoValidator
 CreateProductConfigurationFile
 CreateProductCreatedEvent
-
+CreateProductRecordMap
+CreateProductListingDto
 
 GenerateICsvBuilder
 GenerateCsvBuilder
