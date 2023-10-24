@@ -4,9 +4,19 @@
 @echo off
 setlocal
 
+
+dotnet ef --version >NUL 2>&1
+
+if %ERRORLEVEL% neq 0 (
+    echo "NET CLI is not installed - attempting to install..."
+    dotnet tool install --global dotnet-ef
+)
+
+
 set /p PROJECT_NAME="Enter the project name: "
 set /p USE_AUTH="Do you want to include Authentication? (none/b2c/ad): "
 set /p DATABASE_TYPE="Do you want to use an in-memory database or SQL? (in-memory/sql): "
+
 
 if "%DATABASE_TYPE%"=="sql" (
     set /p INSTANCE_NAME="Please enter the SQL instance name: "
