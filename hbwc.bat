@@ -97,6 +97,14 @@ cd ../Infrastructure/Persistence
 rmdir /s /q Migrations
 cd ../../
 
+:: at src now
+cd Application
+rmdir /s /q TodoItems
+rmdir /s /q TodoLists
+rmdir /s /q WeatherForecasts
+
+cd ../
+
 :: Remove the initial references as we re configure them for our hybrid clean architecture
 cd %PROJECT_NAME%/Client
 dotnet remove reference ../Shared/%PROJECT_NAME%.Shared.csproj

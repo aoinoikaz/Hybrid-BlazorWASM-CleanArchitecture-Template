@@ -90,6 +90,7 @@ function UpdateServerProgramCs
 }
 
 
+
 function UpdateClientProgramCs() 
 {
     # Define the file path
@@ -1033,6 +1034,91 @@ public class UpdateProductCommandValidator : AbstractValidator<UpdateProductComm
 
 
 
+function CreateGetProductsWithPaginationQueryValidator() 
+{
+    $dirPath = "src\Application\Features\Products\Validators"
+    $filePath = "$dirPath\GetProductsWithPaginationQueryValidator.cs"
+
+    if (-Not (Test-Path $dirPath)) 
+	{
+        New-Item -ItemType Directory -Force -Path $dirPath
+    }
+
+    $content = @"
+using $($projectName).Application.Features.Products.Queries;
+using FluentValidation;
+
+namespace $($projectName).Application.Features.Products.Validators;
+
+public class GetProductsWithPaginationQueryValidator : AbstractValidator<GetProductsWithPaginationQuery>
+{
+    public GetProductsWithPaginationQueryValidator()
+    {
+        RuleFor(x => x.PageNumber)
+            .GreaterThanOrEqualTo(1).WithMessage("PageNumber must be greater than or equal to 1.");
+
+        RuleFor(x => x.PageSize)
+            .GreaterThanOrEqualTo(1).WithMessage("PageSize must be greater than or equal to 1.");
+    }
+}
+
+"@
+    $content | Set-Content -Path $filePath
+}
+
+
+function CreateGetProductsWithPaginationQuery() 
+{
+    $dirPath = "src\Application\Features\Products\Queries"
+    $filePath = "$dirPath\GetProductsWithPaginationQuery.cs"
+
+    if (-Not (Test-Path $dirPath)) 
+	{
+        New-Item -ItemType Directory -Force -Path $dirPath
+    }
+
+    $content = @"
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using $($projectName).Application.Common.Interfaces;
+using $($projectName).Application.Common.Mappings;
+using $($projectName).Application.Common.Models;
+using $($projectName).Shared.DTOs;
+using MediatR;
+
+namespace $($projectName).Application.Features.Products.Queries;
+
+public record GetProductsWithPaginationQuery : IRequest<PaginatedList<ProductDto>>
+{
+    public int PageNumber { get; init; } = 1;
+    public int PageSize { get; init; } = 10;
+}
+
+public class GetProductsWithPaginationQueryHandler : IRequestHandler<GetProductsWithPaginationQuery, PaginatedList<ProductDto>>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly IMapper _mapper;
+
+    public GetProductsWithPaginationQueryHandler(IApplicationDbContext context, IMapper mapper)
+    {
+        _context = context;
+        _mapper = mapper;
+    }
+
+    public async Task<PaginatedList<ProductDto>> Handle(GetProductsWithPaginationQuery request, CancellationToken cancellationToken)
+    {
+        return await _context.Products
+            .OrderBy(x => x.Name)
+            .ProjectTo<ProductDto>(_mapper.ConfigurationProvider)
+            .PaginatedListAsync(request.PageNumber, request.PageSize);
+    }
+}
+"@
+    $content | Set-Content -Path $filePath
+}
+
+
+
 function CreateProductDtoValidator() 
 {
     $filePath = "src\Shared\Validators\ProductDtoValidator.cs"
@@ -1492,18 +1578,6 @@ Function UpdateNavMenuPage()
                 <span class="oi oi-tag" aria-hidden="true"></span> Add Product
             </NavLink>
         </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="fetchdata">
-                <span class="oi oi-list-rich" aria-hidden="true"></span> Weather Forecasts
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="oi oi-plus" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
     </nav>
 </div>
 
@@ -1554,6 +1628,8 @@ CreateGetAllProductsQueryFile
 CreateGetProductByIdQueryFile
 DeleteProductCommandValidatorFile
 CreateGetProductByIdQueryValidatorFile
+CreateGetProductsWithPaginationQuery
+CreateGetProductsWithPaginationQueryValidator
 CreateUpdateProductCommandValidator
 CreateProductDtoValidator
 CreateProductConfigurationFile
