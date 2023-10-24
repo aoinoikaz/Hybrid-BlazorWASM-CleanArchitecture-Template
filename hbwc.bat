@@ -106,8 +106,6 @@ rmdir /s /q WeatherForecasts
 cd ../
 
 
-
-
 del "Domain\Events\*.*" /Q
 del "Domain\Entities\TodoItem.cs" /Q
 del "Domain\Entities\TodoList.cs" /Q
@@ -122,11 +120,6 @@ del "%PROJECT_NAME%\Server\Controllers\TodoListsController.cs" /Q
 del "%PROJECT_NAME%\Server\Controllers\WeatherForecastController.cs" /Q
 del "%PROJECT_NAME%\Client\Pages\FetchData.razor" /Q
 del "%PROJECT_NAME%\Client\Pages\Counter.razor" /Q
-
-:: del lookupdto / add productlistingdto
-:: del prioritylevel / add category
-:: update product entity/dto 
-
 
 
 :: Remove the initial references as we re configure them for our hybrid clean architecture
