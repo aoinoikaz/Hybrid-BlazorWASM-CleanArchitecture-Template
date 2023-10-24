@@ -5,7 +5,6 @@ param (
 )
 
 
-
 function UpdateAppSettingsJson()
 {
 	if ($databaseType -eq "sql") 
@@ -144,16 +143,6 @@ function UpdateCurrentUserServiceNamespace
 
 
 
-function UpdateWeatherForecastNamespace 
-{
-    $filePath = "src\Shared\DTOs\WeatherForecast.cs"
-    $content = Get-Content -Path $filePath -Raw
-    $modifiedContent = $content -replace 'namespace .+\.Application\.WeatherForecasts\.Queries\.GetWeatherForecasts;', "namespace $projectName.Shared.DTOs;"
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
-
 function UpdateControllerNamespaces 
 {
     $files = Get-ChildItem -Path "src\$projectName\Server\Controllers\*.cs"
@@ -187,48 +176,6 @@ function UpdateApiExceptionFilterAttributeNamespace
 
 
 
-function AddUsingStatementToGetWeatherForecastsQuery 
-{
-    $filePath = "src\Application\WeatherForecasts\Queries\GetWeatherForecasts\GetWeatherForecastsQuery.cs"
-    $content = Get-Content -Path $filePath -Raw
-    $newLine = "using $projectName.Shared.DTOs;"
-    $modifiedContent = $newLine + [Environment]::NewLine + [Environment]::NewLine + $content
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
-
-function AddUsingStatementToWeatherForecastController 
-{
-
-    $filePath = "src\$projectName\Server\Controllers\WeatherForecastController.cs"
-    $content = Get-Content -Path $filePath -Raw
-    $newLine = "using $projectName.Shared.DTOs;"
-    $modifiedContent = $newLine + [Environment]::NewLine + [Environment]::NewLine + $content
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
-
-function UpdateFetchDataNamespace 
-{
-    $filePath = "src\$projectName\Client\Pages\FetchData.razor"
-    $content = Get-Content -Path $filePath -Raw
-    $modifiedContent = $content -replace "$projectName\.Shared", "$projectName.Shared.DTOs"
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
-function UpdateFetchDataRazor 
-{
-    $filePath = "src\$projectName\Client\Pages\FetchData.razor"
-    $content = Get-Content -Path $filePath -Raw
-    $modifiedContent = $content -replace 'forecasts = await Http\.GetFromJsonAsync<WeatherForecast\[\]>\("WeatherForecast"\)', 'forecasts = await Http.GetFromJsonAsync<WeatherForecast[]>("api/WeatherForecast")'
-    Set-Content -Path $filePath -Value $modifiedContent
-}
-
-
-
 function RemoveMicrosoftIdentityWebApiForB2C 
 {
     $filePath = "src\$projectName\Server\Program.cs"
@@ -236,7 +183,6 @@ function RemoveMicrosoftIdentityWebApiForB2C
     $modifiedContent = $content -replace '\s*\.AddMicrosoftIdentityWebApi\(builder\.Configuration\.GetSection\("AzureAdB2C"\)\);', ''
     Set-Content -Path $filePath -Value $modifiedContent
 }
-
 
 
 function CreateIProductApi() 
@@ -274,11 +220,65 @@ public interface IProductApi
     [Delete("/api/Products/{id}")]
     Task<Result> DeleteProductAsync(int id);
 }
-
-
 "@
     New-Item -Path $filePath -ItemType File
     Set-Content -Path $filePath -Value $content
+}
+
+
+
+function GenerateICsvBuilder()
+{
+    $fullPath = "src\Application\Common\Interfaces\ICsvFileBuilder.cs"
+
+	$newContent = @"
+using $($projectName).Shared.DTOs;
+
+namespace $($projectName).Application.Common.Interfaces;
+
+public interface ICsvFileBuilder
+{
+    byte[] BuildFile<T>(IEnumerable<T> records);
+}
+
+"@
+
+	Set-Content -Path $fullPath -Value $newContent
+}
+
+
+function GenerateCsvBuilder()
+{
+    $fullPath = "src\Infrastructure\Files\CsvFileBuilder.cs"
+
+	$newContent = @"
+using CsvHelper;
+using System.Globalization;
+using $($projectName).Application.Common.Interfaces;
+
+namespace $($projectName).Infrastructure.Files;
+
+public class CsvFileBuilder : ICsvFileBuilder
+{
+    public byte[] BuildFile<T>(IEnumerable<T> records)
+    {
+        using var memoryStream = new MemoryStream();
+        using (var streamWriter = new StreamWriter(memoryStream))
+        {
+            using var csvWriter = new CsvWriter(streamWriter, CultureInfo.InvariantCulture);
+
+            // If you have specific class maps for different entities, 
+            // you might need a mechanism to determine and apply them here.
+
+            csvWriter.WriteRecords(records);
+        }
+
+        return memoryStream.ToArray();
+    }
+}
+"@
+
+	Set-Content -Path $fullPath -Value $newContent
 }
 
 
@@ -412,6 +412,35 @@ public class ProductDto
 	public int Id { get; set; }
 	public string? Name { get; set; }
 	public decimal Price { get; set; }
+}
+"@
+    New-Item -Path $filePath -ItemType File
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateProductCreatedEvent() 
+{
+    $directory = "src\Domain\Events"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "ProductCreatedEvent.cs"
+	
+    $content = @"
+namespace $($projectName).Domain.Events;
+
+public class ProductCreatedEvent : BaseEvent
+{
+    public ProductCreatedEvent(Product product)
+    {
+        this.Product = product;
+    }
+
+    public Product Product { get; }
 }
 "@
     New-Item -Path $filePath -ItemType File
@@ -1061,7 +1090,6 @@ public class GetProductsWithPaginationQueryValidator : AbstractValidator<GetProd
             .GreaterThanOrEqualTo(1).WithMessage("PageSize must be greater than or equal to 1.");
     }
 }
-
 "@
     $content | Set-Content -Path $filePath
 }
@@ -1202,57 +1230,192 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 
 
 
-function UpdateIApplicationDbContext() 
+function UpdateIApplicationDbContext()
 {
-    $filePath = "src\Application\Common\Interfaces\IApplicationDbContext.cs"
-    
-    if (Test-Path $filePath) 
-	{
-        $content = Get-Content $filePath -Raw
-        $newLine = "`r`nDbSet<Product> Products { get; }"
-        
-        if (-not ($content -match "DbSet<Product> Products")) 
-		{
-            $content = $content -replace "Task<int> SaveChangesAsync\(CancellationToken cancellationToken\);", "$newLine`r`n    Task<int> SaveChangesAsync(CancellationToken cancellationToken);"
-            Set-Content -Path $filePath -Value $content
-        }
-    } 
-	else 
-	{
-        Write-Host "File $filePath not found."
-    }
+    $fullPath = "src\Application\Common\Interfaces\IApplicationDbContext.cs"
+
+	$newContent = @"
+using $($projectName).Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace $($projectName).Application.Common.Interfaces;
+
+public interface IApplicationDbContext
+{
+   
+    DbSet<Product> Products { get; }
+
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+}
+"@
+
+	Set-Content -Path $fullPath -Value $newContent
 }
 
 
 
-function UpdateApplicationDbContext() 
+function UpdateApplicationDbContext()
 {
-    $filePath = "src\Infrastructure\Persistence\ApplicationDbContext.cs"
-    
-    if (Test-Path $filePath) 
-	{
-        $content = Get-Content $filePath
-        $lineToAdd = "public DbSet<Product> Products => Set<Product>();"
-        $lineToFind = "    private readonly IMediator _mediator;"
+    $fullPath = "src\Infrastructure\Persistence\ApplicationDbContext.cs"
 
-        $index = [array]::IndexOf($content, $lineToFind)
+	$newContent = @"
+using System.Reflection;
+using $($projectName).Application.Common.Interfaces;
+using $($projectName).Domain.Entities;
+using $($projectName).Infrastructure.Identity;
+using $($projectName).Infrastructure.Persistence.Interceptors;
+using Duende.IdentityServer.EntityFramework.Options;
+using MediatR;
+using Microsoft.AspNetCore.ApiAuthorization.IdentityServer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
-        if ($index -ne -1) 
-		{
-            $content = $content[0..$index] + $lineToAdd + $content[($index+1)..($content.Length - 1)]
-            Set-Content -Path $filePath -Value $content
-        }
-        else 
-		{
-            Write-Host "Line to find not found."
-        }
+namespace $($projectName).Infrastructure.Persistence;
+
+public class ApplicationDbContext : ApiAuthorizationDbContext<ApplicationUser>, IApplicationDbContext
+{
+    private readonly IMediator _mediator;
+    private readonly AuditableEntitySaveChangesInterceptor _auditableEntitySaveChangesInterceptor;
+
+    public ApplicationDbContext(
+        DbContextOptions<ApplicationDbContext> options,
+        IOptions<OperationalStoreOptions> operationalStoreOptions,
+        IMediator mediator,
+        AuditableEntitySaveChangesInterceptor auditableEntitySaveChangesInterceptor) 
+        : base(options, operationalStoreOptions)
+    {
+        _mediator = mediator;
+        _auditableEntitySaveChangesInterceptor = auditableEntitySaveChangesInterceptor;
     }
-    else 
-	{
-        Write-Host "File $filePath not found."
+
+    public DbSet<Product> Products => Set<Product>();
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+
+        base.OnModelCreating(builder);
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.AddInterceptors(_auditableEntitySaveChangesInterceptor);
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await _mediator.DispatchDomainEvents(this);
+
+        return await base.SaveChangesAsync(cancellationToken);
     }
 }
+"@
 
+	Set-Content -Path $fullPath -Value $newContent
+}
+
+
+
+function GenerateApplicationDbContextInitializer()
+{
+    $fullPath = "src\Infrastructure\Persistence\ApplicationDbContextInitialiser.cs"
+
+	$newContent = @"
+using $($projectName).Domain.Entities;
+using $($projectName).Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace $($projectName).Infrastructure.Persistence;
+
+public class ApplicationDbContextInitialiser
+{
+    private readonly ILogger<ApplicationDbContextInitialiser> _logger;
+    private readonly ApplicationDbContext _context;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
+
+    public ApplicationDbContextInitialiser(ILogger<ApplicationDbContextInitialiser> logger, ApplicationDbContext context, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
+    {
+        _logger = logger;
+        _context = context;
+        _userManager = userManager;
+        _roleManager = roleManager;
+    }
+
+    public async Task InitialiseAsync()
+    {
+        try
+        {
+            if (_context.Database.IsSqlServer())
+            {
+                await _context.Database.MigrateAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred while initialising the database.");
+            throw;
+        }
+    }
+
+    public async Task SeedAsync()
+    {
+        try
+        {
+            await TrySeedAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred while seeding the database.");
+            throw;
+        }
+    }
+
+    public async Task TrySeedAsync()
+    {
+        // Default roles
+        var administratorRole = new IdentityRole("Administrator");
+
+        if (_roleManager.Roles.All(r => r.Name != administratorRole.Name))
+        {
+            await _roleManager.CreateAsync(administratorRole);
+        }
+
+        // Default users
+        var administrator = new ApplicationUser { UserName = "administrator@localhost", Email = "administrator@localhost" };
+
+        if (_userManager.Users.All(u => u.UserName != administrator.UserName))
+        {
+            await _userManager.CreateAsync(administrator, "Administrator1!");
+            if (!string.IsNullOrWhiteSpace(administratorRole.Name))
+            {
+                await _userManager.AddToRolesAsync(administrator, new [] { administratorRole.Name });
+            }
+        }
+
+        // Default data
+        // Seed, if necessary
+        if (!_context.Products.Any())
+        {
+            _context.Products.AddRange(new List<Product>()
+            {
+                new Product() { Name = "GTA 5", Price = 89.99m },
+                new Product() { Name = "GTA 6",  Price = 149.99m },
+                new Product() { Name = "Black Ops 3", Price = 79.99m },
+                new Product() { Name = "Modern Warfare 3", Price = 99.99m },
+                new Product() { Name = "Elden Ring", Price = 9.99m },
+            });
+
+            await _context.SaveChangesAsync();
+        }
+    }
+}
+"@
+
+	Set-Content -Path $fullPath -Value $newContent
+}
 
 
 function CreateProductPage() 
@@ -1598,21 +1761,15 @@ Function UpdateNavMenuPage()
 
 
 
-
-
 UpdateAppSettingsJson
 UpdateServerProgramCs
 UpdateClientProgramCs
 UpdateCurrentUserServiceNamespace
-UpdateWeatherForecastNamespace
+
 UpdateControllerNamespaces
 UpdateApiControllerBaseUsingStatement
 UpdateApiExceptionFilterAttributeNamespace
 
-AddUsingStatementToGetWeatherForecastsQuery
-AddUsingStatementToWeatherForecastController
-UpdateFetchDataNamespace
-UpdateFetchDataRazor
 RemoveMicrosoftIdentityWebApiForB2C
 CreateIProductApi
 CreateResultClass
@@ -1633,6 +1790,12 @@ CreateGetProductsWithPaginationQueryValidator
 CreateUpdateProductCommandValidator
 CreateProductDtoValidator
 CreateProductConfigurationFile
+CreateProductCreatedEvent
+
+
+GenerateICsvBuilder
+GenerateCsvBuilder
+GenerateApplicationDbContextInitializer
 
 UpdateIApplicationDbContext
 UpdateApplicationDbContext

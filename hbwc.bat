@@ -105,6 +105,19 @@ rmdir /s /q WeatherForecasts
 
 cd ../
 
+del "Domain\Events\*.*" /Q
+del "Domain\Entities\TodoItem.cs" /Q
+del "Domain\Entities\TodoList.cs" /Q
+del "Infrastructure\Persistence\Configurations\TodoListConfiguration.cs" /Q
+del "Infrastructure\Persistence\Configurations\TodoItemConfiguration.cs" /Q
+del "%PROJECT_NAME%\Server\Controllers\TodoItemsController.cs" /Q
+del "%PROJECT_NAME%\Server\Controllers\TodoListsController.cs" /Q
+del "%PROJECT_NAME%\Server\Controllers\WeatherForecastController.cs" /Q
+del "%PROJECT_NAME%\Client\Pages\FetchData.razor" /Q
+del "%PROJECT_NAME%\Client\Pages\Counter.razor" /Q
+
+
+
 :: Remove the initial references as we re configure them for our hybrid clean architecture
 cd %PROJECT_NAME%/Client
 dotnet remove reference ../Shared/%PROJECT_NAME%.Shared.csproj
