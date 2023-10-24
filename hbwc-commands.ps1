@@ -1316,7 +1316,7 @@ using CsvHelper.Configuration;
 using System.Globalization;
 using $($projectName).Shared.DTOs;
 
-namespace $($projectName).Infrastructure.Files.Maps
+namespace $($projectName).Infrastructure.Files.Maps;
 
 public class ProductRecordMap : ClassMap<ProductDto>
 {

@@ -105,7 +105,6 @@ rmdir /s /q WeatherForecasts
 
 cd ../
 
-
 del "Domain\Events\*.*" /Q
 del "Domain\Entities\TodoItem.cs" /Q
 del "Domain\Entities\TodoList.cs" /Q
