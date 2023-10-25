@@ -154,7 +154,7 @@ mkdir Enums
 mkdir References
 mkdir Validators
 
-del "Shared\Class1.cs" /Q
+del "Class1.cs" /Q
 
 cd ../../
 

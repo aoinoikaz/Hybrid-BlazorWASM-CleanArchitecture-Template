@@ -222,7 +222,7 @@ public interface IProductApi
     Task<IEnumerable<ProductDto>> GetProductsAsync();
 
     [Get("/api/Products/{id}")]
-    Task<ProductDto> GetProductByIdAsync(int id);
+    Task<Result<ProductDto>> GetProductByIdAsync(int id);
 
     [Post("/api/Products")]
     Task<Result<int>> CreateProductAsync(ProductDto product);
@@ -335,7 +335,7 @@ public class Result<T>
 
     public Result() { }
 
-    public Result(T data, bool succeeded)
+    public Result(T? data, bool succeeded)
     {
         Data = data;
         Succeeded = succeeded;
@@ -346,7 +346,7 @@ public class Result<T>
         return new Result<T>(data, true);
     }
 
-    public static Result<T> Failure(T data, IDictionary<string, IEnumerable<string>>? fieldErrors = null, IEnumerable<string>? generalErrors = null)
+    public static Result<T> Failure(T? data, IDictionary<string, IEnumerable<string>>? fieldErrors = null, IEnumerable<string>? generalErrors = null)
     {
         return new Result<T>(data, false)
         {
@@ -427,7 +427,7 @@ public class ProductDto
     public decimal Price { get; set; }
     public int StockQuantity { get; set; }
     public string? SKU { get; set; }
-    public bool IsAvailable { get; set; }
+    public bool IsAvailable => StockQuantity > 0;
     public string? Category { get; set; }
     public string? Brand { get; set; }
     public DateTime? ReleaseDate { get; set; }
@@ -591,6 +591,7 @@ using $($projectName).Domain.Enums;
 using System.Linq;
 
 namespace $($projectName).Server.Controllers;
+
 public class ProductsController : ApiControllerBase
 {
     [HttpGet]
@@ -606,18 +607,11 @@ public class ProductsController : ApiControllerBase
         {
             var product = await Mediator.Send(new GetProductByIdQuery { Id = id });
 
-            if (product != null)
-            {
-                return Ok(product);
-            }
-            else
-            {
-                return NotFound(); // Product with the given ID was not found.
-            }
+            return product != null ? (ActionResult<ProductDto>)Ok(product) : (ActionResult<ProductDto>)NotFound();
         }
         catch (NotFoundException)
         {
-            return NotFound(); // Handle the case where the requested product was not found.
+            return NotFound();
         }
     }
 
@@ -626,18 +620,11 @@ public class ProductsController : ApiControllerBase
     {
         var result = await Mediator.Send(command);
 
-        if (result.Succeeded)
-        {
-            return CreatedAtAction(nameof(GetAll), new { id = result.Data }, result);
-        }
-        else
-        {
-            if (result.FieldErrors.Any())
-            {
-                return BadRequest(result);
-            }
-            return StatusCode(500, result.GeneralErrors);
-        }
+        return result.Succeeded
+            ? (ActionResult<Result<int>>)Ok(result)
+            : result.FieldErrors != null && result.FieldErrors.Any()
+                ? (ActionResult<Result<int>>)BadRequest(result)
+                : (ActionResult<Result<int>>)StatusCode(500, result.GeneralErrors);
     }
 
     [HttpPut("{id}")]
@@ -650,18 +637,10 @@ public class ProductsController : ApiControllerBase
 
         var result = await Mediator.Send(command);
 
-        if (result.Succeeded)
-        {
-            return Ok(result);
-        }
-        else
-        {
-            if (result.FieldErrors.Any())
-            {
-                return BadRequest(result);
-            }
-            return StatusCode(500, result.GeneralErrors);
-        }
+        return result.Succeeded
+            ? (ActionResult<Result>)Ok(result)
+            : result.FieldErrors != null && result.FieldErrors.Any() ? (ActionResult<Result>)BadRequest(result)
+                : (ActionResult<Result>)StatusCode(500, result.GeneralErrors);
     }
 
     [HttpDelete("{id}")]
@@ -669,25 +648,18 @@ public class ProductsController : ApiControllerBase
     {
         var result = await Mediator.Send(new DeleteProductCommand(id));
 
-        if (result.Succeeded)
-        {
-            return Ok(result);
-        }
-        else
-        {
-            if (result.FieldErrors.Any())
-            {
-                return BadRequest(result);
-            }
-            return StatusCode(500, result.GeneralErrors);
-        }
+        return result.Succeeded
+            ? (ActionResult<Result>)Ok(result)
+            : result.FieldErrors != null && result.FieldErrors.Any()
+                ? (ActionResult<Result>)BadRequest(result)
+                : (ActionResult<Result>)StatusCode(500, result.GeneralErrors);
     }
 
+
     [HttpGet("Categories")]
-    public async Task<ActionResult<Result<List<string>>>> GetAllCategoriesAsync()
+    public ActionResult<Result<List<string>>> GetAllCategories()
     {
         var categories = Enum.GetNames(typeof(Category)).ToList();
-        // If there were any I/O bound operations, you'd use await here
         return Ok(new Result<List<string>> { Data = categories, Succeeded = true });
     }
 }
@@ -765,7 +737,6 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
         }
     }
 }
-
 "@
     $content | Set-Content -Path $filePath
 }
@@ -804,7 +775,7 @@ public class DeleteProductCommandHandler : IRequestHandler<DeleteProductCommand,
     {
         try
         {
-            var product = await _dbContext.Products.FindAsync(request.Id);
+            var product = await _dbContext.Products.FindAsync(new object?[] { request.Id }, cancellationToken: cancellationToken);
             if (product == null) return Result.Failure(generalErrors: new string[] { "Product not found." });
 
             _dbContext.Products.Remove(product);
@@ -818,11 +789,9 @@ public class DeleteProductCommandHandler : IRequestHandler<DeleteProductCommand,
         }
     }
 }
-
 "@
     $content | Set-Content -Path $filePath
 }
-
 
 
 function UpdateProductCommandFile() 
@@ -837,12 +806,24 @@ function UpdateProductCommandFile()
 
     $content = @"
 using $($projectName).Application.Common.Interfaces;
+using $($projectName).Domain.Enums;
 using $($projectName).Shared.Common.Models;
 using MediatR;
 
 namespace $($projectName).Application.Features.Products.Commands;
 
-public record UpdateProductCommand(int Id, string Name, decimal Price) : IRequest<Result<int>>;
+public record UpdateProductCommand(
+    int Id,
+    string? Name,
+    string? Description,
+    decimal Price,
+    int StockQuantity,
+    string? SKU,
+    string? Category, // Remains a string
+    string? Brand,
+    DateTime? ReleaseDate,
+    string? ImageUrl
+) : IRequest<Result<int>>;
 
 public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, Result<int>>
 {
@@ -857,11 +838,24 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
     {
         try
         {
-            var product = await _dbContext.Products.FindAsync(request.Id);
+            var product = await _dbContext.Products.FindAsync(new object?[] { request.Id }, cancellationToken: cancellationToken);
             if (product == null) return Result<int>.Failure(-1, generalErrors: new string[] { "Product not found." });
 
             product.Name = request.Name;
+            product.Description = request.Description;
             product.Price = request.Price;
+            product.StockQuantity = request.StockQuantity;
+            product.SKU = request.SKU;
+
+            // Convert the string category to the Category enum
+            if (request.Category != null && Enum.TryParse(typeof(Category), request.Category, out var categoryEnum))
+            {
+                product.Category = (Category)categoryEnum;
+            }
+
+            product.Brand = request.Brand;
+            product.ReleaseDate = request.ReleaseDate;
+            product.ImageUrl = request.ImageUrl;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -897,7 +891,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace $($projectName).Application.Features.Products.Queries;
 
-
 public record GetAllProductsQuery : IRequest<IEnumerable<ProductDto>>;
 
 public class GetAllProductsQueryHandler : IRequestHandler<GetAllProductsQuery, IEnumerable<ProductDto>>
@@ -921,7 +914,6 @@ public class GetAllProductsQueryHandler : IRequestHandler<GetAllProductsQuery, I
             Price = product.Price,
             StockQuantity = product.StockQuantity,
             SKU = product.SKU,
-            IsAvailable = product.IsAvailable,
             Category = product.Category.ToString(),
             Brand = product.Brand,
             ReleaseDate = product.ReleaseDate,
@@ -948,17 +940,18 @@ function CreateGetProductByIdQueryFile()
     $content = @"
 using $($projectName).Application.Common.Interfaces;
 using $($projectName).Shared.DTOs;
+using $($projectName).Shared.Common.Models;
+
 using MediatR;
 
 namespace $($projectName).Application.Features.Products.Queries;
 
-public class GetProductByIdQuery : IRequest<ProductDto>
+public class GetProductByIdQuery : IRequest<Result<ProductDto>>
 {
     public int Id { get; set; }
 }
 
-
-public class GetProductByIdQueryHandler : IRequestHandler<GetProductByIdQuery, ProductDto>
+public class GetProductByIdQueryHandler : IRequestHandler<GetProductByIdQuery, Result<ProductDto>>
 {
     private readonly IApplicationDbContext _context;
 
@@ -967,10 +960,10 @@ public class GetProductByIdQueryHandler : IRequestHandler<GetProductByIdQuery, P
         _context = context;
     }
 
-    public async Task<ProductDto> Handle(GetProductByIdQuery request, CancellationToken cancellationToken)
+    public async Task<Result<ProductDto>> Handle(GetProductByIdQuery request, CancellationToken cancellationToken)
     {
         // Retrieve the product by its Id from the data source.
-        var product = await _context.Products.FindAsync(request.Id);
+        var product = await _context.Products.FindAsync(new object?[] { request.Id }, cancellationToken: cancellationToken);
 
         if (product != null)
         {
@@ -979,14 +972,21 @@ public class GetProductByIdQueryHandler : IRequestHandler<GetProductByIdQuery, P
             {
                 Id = product.Id,
                 Name = product.Name,
+                Description = product.Description,
                 Price = product.Price,
-                // Map other properties here...
+                StockQuantity = product.StockQuantity,
+                SKU = product.SKU,
+                Category = product.Category.ToString(), // Convert Enum to String
+                Brand = product.Brand,
+                ReleaseDate = product.ReleaseDate,
+                ImageUrl = product.ImageUrl,
             };
 
-            return productDto;
+            return Result<ProductDto>.Success(productDto);
         }
 
-        return null; // Return null if the product is not found.
+        // If the product is not found, return a failure Result.
+        return Result<ProductDto>.Failure(null, generalErrors: new string[] { "Product not found." });
     }
 }
 "@
@@ -1025,12 +1025,19 @@ public class CreateProductCommandValidator : AbstractValidator<CreateProductComm
         RuleFor(command => new ProductDto
         {
             Name = command.Name,
-            Price = command.Price
+            Price = command.Price,
+            Description = command.Description,
+            StockQuantity = command.StockQuantity,
+            SKU = command.SKU,
+            Category = command.Category,
+            Brand = command.Brand,
+            ReleaseDate = command.ReleaseDate,
+            ImageUrl = command.ImageUrl,
+
         }).SetValidator(new ProductDtoValidator());
 
         RuleFor(command => command.Name).Must(IsNameUnique).WithMessage("Product name must be unique.");
     }
-
 
     private bool IsNameUnique(string name)
     {
@@ -1144,7 +1151,14 @@ public class UpdateProductCommandValidator : AbstractValidator<UpdateProductComm
         RuleFor(command => new ProductDto
         {
             Name = command.Name,
-            Price = command.Price
+            Price = command.Price,
+            Description = command.Description,
+            StockQuantity = command.StockQuantity,
+            SKU = command.SKU,
+            Category = command.Category,
+            Brand = command.Brand,
+            ReleaseDate = command.ReleaseDate,
+            ImageUrl = command.ImageUrl,
         }).SetValidator(new ProductDtoValidator());
 
         RuleFor(command => command.Name).Must(IsNameUnique).WithMessage("Product name must be unique.");
@@ -1155,7 +1169,7 @@ public class UpdateProductCommandValidator : AbstractValidator<UpdateProductComm
         return _context.Products.Any(product => product.Id == id);
     }
 
-    private bool IsNameUnique(UpdateProductCommand command, string name)
+    private bool IsNameUnique(UpdateProductCommand command, string? name)
     {
         bool isUnique = !_context.Products.Any(product => product.Name == name && product.Id != command.Id);
         return isUnique;
@@ -1697,13 +1711,11 @@ function CreateProductPage()
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 
-<h1>Create Product</h1>
-
 @code {
-    public ProductDto? Model { get; set; }
+    public ProductDto? Model = null;
     private EditContext? editContext;
-    private bool isLoading = false;
     Result<List<string>> categories = new Result<List<string>> { Data = new List<string>(), Succeeded = false };
+    private bool isLoading = false;
 
     protected override async void OnInitialized()
     {
@@ -1713,6 +1725,11 @@ function CreateProductPage()
         try
         {
             categories = await ProductApi.GetAllCategoriesAsync();
+
+            if (categories.Data != null)
+            {
+                StateHasChanged();
+            }
 
         }
         catch (ApiException ex)
@@ -1742,9 +1759,9 @@ function CreateProductPage()
 
                 }
             }
-            catch (ApiException)
+            catch (ApiException ex)
             {
-                await JSRuntime.InvokeVoidAsync("alert", "Name must be unique");
+                await JSRuntime.InvokeVoidAsync("alert", ex.Content);
             }
             finally
             {
@@ -1754,12 +1771,10 @@ function CreateProductPage()
     }
 }
 
+<PageTitle>Create Product</PageTitle>
+<h1>Create Product</h1>
 
-@if (categories.Data == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
+@if (Model != null)
 {
     <EditForm OnValidSubmit="@SubmitAsync" EditContext="@editContext">
         <FluentValidationValidator />
@@ -1787,10 +1802,13 @@ else
             <div class="mb-7 col-md-6">
                 <label class="form-label">Category</label>
                 <InputSelect class="form-control" @bind-Value="Model.Category">
+                @if (categories.Data != null)
+                {
                     @foreach (var category in categories.Data)
                     {
                         <option value="@category">@category</option>
                     }
+                }
                 </InputSelect>
             </div>
 
@@ -1829,7 +1847,6 @@ else
 }
 
 
-
 function CreateUpdateProductPage() 
 {
     $fullPath = "src\$($projectName)\Client\Pages\UpdateProduct.razor"
@@ -1844,52 +1861,28 @@ function CreateUpdateProductPage()
 @inject IProductApi ProductApi
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
-<PageTitle>Edit Product</PageTitle>
-
-<h1>Edit Product</h1>
-
-@if (product == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <EditForm OnValidSubmit="@Update" EditContext="@editContext">
-    <FluentValidationValidator />
-    <div class="mx-12 row">
-        <div class="mb-7 col-md-6">
-            <label class="form-label required">Name</label>
-            <InputText class="form-control" @bind-Value="product.Name" />
-        </div>
-        <div class="mb-7 col-md-6">
-            <label class="form-label required">Price</label>
-            <InputNumber class="form-control" @bind-Value="product.Price" />
-        </div>
-        <ValidationSummary />
-
-        <div class="d-flex">
-            <button type="submit" class="btn btn-primary btn-icon-light w-125px">Update</button>
-        </div>
-       
-    </div>
-    </EditForm>
-   
-}
 
 @code {
-    private ProductDto? product;
+    private Result<ProductDto>? result = null;
+    private ProductDto? product = null;
+    private EditContext? editContext;
+    Result<List<string>> categories = new Result<List<string>> { Data = new List<string>(), Succeeded = false };
 
     [Parameter]
     public int Id { get; set; }
-
-    private EditContext? editContext;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            product = await ProductApi.GetProductByIdAsync(Id);
-            editContext = new EditContext(product);
+            categories = await ProductApi.GetAllCategoriesAsync();
+            result = await ProductApi.GetProductByIdAsync(Id);
+
+            if (result.Data != null)
+            {
+                product = result.Data;
+                editContext = new EditContext(product);
+            }
         }
         catch (ApiException)
         {
@@ -1904,9 +1897,11 @@ else
         {
             if (product != null)
             {
-                result = await ProductApi.UpdateProductAsync(Id, product);
+                if (product != null)
+                {
+                    result = await ProductApi.UpdateProductAsync(Id, product);
+                }
             }
-
             if (result != null)
             {
                 if (result.Succeeded)
@@ -1918,14 +1913,76 @@ else
                 {
                     await JSRuntime.InvokeVoidAsync("alert", "Error updating product.");
                 }
-            
             }
         }
-        catch (ApiException)
+        catch (ApiException ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", "Name must be unique");
+            await JSRuntime.InvokeVoidAsync("alert", ex.Content);
         }
     }
+}
+
+<PageTitle>Edit Product</PageTitle>
+<h1>Edit Product</h1>
+
+@if (product == null || categories.Data == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm OnValidSubmit="@Update" EditContext="@editContext">
+        <FluentValidationValidator />
+        <div class="mx-12 row">
+            <div class="mb-7 col-md-6">
+                <label class="form-label required">Name</label>
+                <InputText class="form-control" @bind-Value="product.Name" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Description</label>
+                <InputTextArea class="form-control" @bind-Value="product.Description" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label required">Price</label>
+                <InputNumber class="form-control" @bind-Value="product.Price" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label required">Stock Quantity</label>
+                <InputNumber class="form-control" @bind-Value="product.StockQuantity" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">SKU</label>
+                <InputText class="form-control" @bind-Value="product.SKU" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Category</label>
+                <InputSelect class="form-control" @bind-Value="product.Category">
+                    @foreach (var category in categories.Data)
+                    {
+                        <option value="@category">@category</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Brand</label>
+                <InputText class="form-control" @bind-Value="product.Brand" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Release Date</label>
+                <InputDate class="form-control" @bind-Value="product.ReleaseDate" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Image URL</label>
+                <InputText class="form-control" @bind-Value="product.ImageUrl" />
+            </div>
+            <ValidationSummary />
+
+            <div class="d-flex">
+                <button type="submit" class="btn btn-primary btn-icon-light w-125px">Update</button>
+            </div>
+
+        </div>
+    </EditForm>
 }
 "@
     Set-Content -Path $fullPath -Value $updateProductContent
@@ -1955,7 +2012,7 @@ function CreateIndexPage()
 }
 else
 {
-    <table class="table">
+    <table class="table" style="overflow-x: scroll !important;">
         <thead>
             <tr>
                 <th>Id</th>
@@ -1986,7 +2043,7 @@ else
                     <td>@product.Category</td>
                     <td>@product.Brand</td>
                     <td>@product.ReleaseDate?.ToString("yyyy-MM-dd")</td>
-                    <td><img src="@product.ImageUrl" alt="@product.Name" width="100"></td> <!-- Adjust width as needed -->
+                    <td><img src="@product.ImageUrl" alt="@product.Name" width="100"></td>
                     <td>
                         <button class="btn btn-primary" @onclick="() => UpdateProduct(product.Id)">Edit</button>
                         <button class="btn btn-danger" @onclick="() => DeleteProduct(product.Id)">Delete</button>
