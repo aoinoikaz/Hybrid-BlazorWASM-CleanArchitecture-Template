@@ -110,7 +110,7 @@ del "Domain\Entities\TodoItem.cs" /Q
 del "Domain\Entities\TodoList.cs" /Q
 del "Domain\Enums\PriorityLevel.cs" /Q
 del "Application\Common\Models\LookupDto.cs" /Q
-del "Shared\Class1.cs" /Q
+
 del "Infrastructure\Persistence\Configurations\TodoListConfiguration.cs" /Q
 del "Infrastructure\Persistence\Configurations\TodoItemConfiguration.cs" /Q
 del "Infrastructure\Files\Maps\TodoItemRecordMap.cs" /Q
@@ -153,6 +153,8 @@ mkdir DTOs
 mkdir Enums
 mkdir References
 mkdir Validators
+
+del "Shared\Class1.cs" /Q
 
 cd ../../
 

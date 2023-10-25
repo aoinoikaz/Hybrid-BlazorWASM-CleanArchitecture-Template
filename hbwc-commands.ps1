@@ -101,6 +101,7 @@ using $($projectName).Infrastructure.Persistence;
 using $($projectName).Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -117,17 +118,18 @@ if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
 
-   using (var scope = app.Services.CreateScope())
-   {
+    using (var scope = app.Services.CreateScope())
+    {
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<ApplicationDbContextInitialiser>>();
 
         var initialiser = new ApplicationDbContextInitialiser(logger, context, userManager, roleManager);
-        await initialiser.InitialiseAsync();
+        // TODO: what kind of flow do we want here, for manual trigger of existing migration? if any
+        //await initialiser.InitialiseAsync();
         await initialiser.SeedAsync();
-   }
+    }
 }
 else
 {
@@ -230,6 +232,9 @@ public interface IProductApi
 
     [Delete("/api/Products/{id}")]
     Task<Result> DeleteProductAsync(int id);
+
+    [Get("/api/Products/Categories")]
+    Task<Result<List<string>>> GetAllCategoriesAsync();
 }
 "@
     New-Item -Path $filePath -ItemType File
@@ -576,12 +581,13 @@ function CreateProductsController()
     }
 
     $controllerContent = @"
+using Microsoft.AspNetCore.Mvc;
 using $($projectName).Application.Features.Products.Queries;
 using $($projectName).Application.Features.Products.Commands;
-using Microsoft.AspNetCore.Mvc;
+using $($projectName).Application.Common.Exceptions;
 using $($projectName).Shared.DTOs;
 using $($projectName).Shared.Common.Models;
-using $($projectName).Application.Common.Exceptions;
+using $($projectName).Domain.Enums;
 using System.Linq;
 
 namespace $($projectName).Server.Controllers;
@@ -592,7 +598,6 @@ public class ProductsController : ApiControllerBase
     {
         return Ok(await Mediator.Send(new GetAllProductsQuery()));
     }
-
 
     [HttpGet("{id}")]
     public async Task<ActionResult<ProductDto>> GetById(int id)
@@ -616,7 +621,6 @@ public class ProductsController : ApiControllerBase
         }
     }
 
-
     [HttpPost]
     public async Task<ActionResult<Result<int>>> Create([FromBody] CreateProductCommand command)
     {
@@ -635,7 +639,6 @@ public class ProductsController : ApiControllerBase
             return StatusCode(500, result.GeneralErrors);
         }
     }
-
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Result>> Update(int id, [FromBody] UpdateProductCommand command)
@@ -679,6 +682,14 @@ public class ProductsController : ApiControllerBase
             return StatusCode(500, result.GeneralErrors);
         }
     }
+
+    [HttpGet("Categories")]
+    public async Task<ActionResult<Result<List<string>>>> GetAllCategoriesAsync()
+    {
+        var categories = Enum.GetNames(typeof(Category)).ToList();
+        // If there were any I/O bound operations, you'd use await here
+        return Ok(new Result<List<string>> { Data = categories, Succeeded = true });
+    }
 }
 "@
 
@@ -704,7 +715,17 @@ using MediatR;
 
 namespace $($projectName).Application.Features.Products.Commands;
 
-public record CreateProductCommand(string Name, decimal Price) : IRequest<Result<int>>;
+public record CreateProductCommand(
+    string Name,
+    string Description,
+    decimal Price,
+    int StockQuantity,
+    string SKU,
+    string Category,
+    string Brand,
+    DateTime ReleaseDate,
+    string ImageUrl
+) : IRequest<Result<int>>;
 
 public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, Result<int>>
 {
@@ -715,21 +736,35 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
         _dbContext = dbContext;
     }
 
+
     public async Task<Result<int>> Handle(CreateProductCommand request, CancellationToken cancellationToken)
     {
         try
         {
-            var product = new Product { Name = request.Name, Price = request.Price };
+            var product = new Product
+            {
+                Name = request.Name,
+                Description = request.Description,
+                Price = request.Price,
+                StockQuantity = request.StockQuantity,
+                SKU = request.SKU,
+                Category = Enum.Parse<Category>(request.Category),
+                Brand = request.Brand,
+                ReleaseDate = request.ReleaseDate,
+                ImageUrl = request.ImageUrl
+            };
+
             _dbContext.Products.Add(product);
             await _dbContext.SaveChangesAsync(cancellationToken);
             return Result<int>.Success(product.Id);
         }
         catch (Exception ex)
         {
-            return Result<int>.Failure(-1, generalErrors: new string[] {ex.Message});
+            return Result<int>.Failure(-1, generalErrors: new string[] { ex.Message });
         }
     }
 }
+
 "@
     $content | Set-Content -Path $filePath
 }
@@ -843,7 +878,7 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
 
 
 
-function CreateGetAllProductsQueryFile() 
+function CreateGetAllProductsQueryFile()
 {
     $dirPath = "src\Application\Features\Products\Queries"
     $filePath = "$dirPath\GetAllProductsQuery.cs"
@@ -860,6 +895,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace $($projectName).Application.Features.Products.Queries;
+
 
 public record GetAllProductsQuery : IRequest<IEnumerable<ProductDto>>;
 
@@ -880,11 +916,18 @@ public class GetAllProductsQueryHandler : IRequestHandler<GetAllProductsQuery, I
         {
             Id = product.Id,
             Name = product.Name,
-            Price = product.Price
+            Description = product.Description,
+            Price = product.Price,
+            StockQuantity = product.StockQuantity,
+            SKU = product.SKU,
+            IsAvailable = product.IsAvailable,
+            Category = product.Category.ToString(),
+            Brand = product.Brand,
+            ReleaseDate = product.ReleaseDate,
+            ImageUrl = product.ImageUrl
         });
     }
 }
-
 "@
     $content | Set-Content -Path $filePath
 }
@@ -1216,18 +1259,49 @@ using FluentValidation;
 
 namespace $($projectName).Shared.Validators;
 
+
 public class ProductDtoValidator : AbstractValidator<ProductDto>
 {
     public ProductDtoValidator()
     {
-        RuleFor(product => product.Name).NotEmpty().WithMessage("Name is required.").
-               Length(2, 50).WithMessage("Name must be between 2 and 50 characters.");
+        RuleFor(product => product.Name)
+            .NotEmpty().WithMessage("Name is required.")
+            .Length(2, 50).WithMessage("Name must be between 2 and 50 characters.");
 
-        RuleFor(product => product.Price).NotEmpty().WithMessage("Price is required.")
-                .GreaterThan(0).WithMessage("Price must be greater than 0.");
+        RuleFor(product => product.Description)
+            .NotEmpty().WithMessage("Description is required.")
+            .Length(10, 500).WithMessage("Description must be between 10 and 500 characters.");
 
+        RuleFor(product => product.Price)
+            .NotEmpty().WithMessage("Price is required.")
+            .GreaterThan(0).WithMessage("Price must be greater than 0.");
+
+        RuleFor(product => product.StockQuantity)
+            .NotEmpty().WithMessage("Stock Quantity is required.")
+            .GreaterThan(0).WithMessage("Stock Quantity must be greater than 0.");
+
+        RuleFor(product => product.SKU)
+            .NotEmpty().WithMessage("SKU is required.")
+            .Length(5, 20).WithMessage("SKU must be between 5 and 20 characters.");
+
+        RuleFor(product => product.Category)
+            .NotEmpty().WithMessage("Category is required.")
+            .Length(2, 50).WithMessage("Category must be between 2 and 50 characters.");
+
+        RuleFor(product => product.Brand)
+            .NotEmpty().WithMessage("Brand is required.")
+            .Length(2, 50).WithMessage("Brand must be between 2 and 50 characters.");
+
+        RuleFor(product => product.ReleaseDate)
+            .NotEmpty().WithMessage("Release Date is required.");
+
+        RuleFor(product => product.ImageUrl)
+            .NotEmpty().WithMessage("Image URL is required.")
+            .Must(uri => Uri.IsWellFormedUriString(uri, UriKind.Absolute))
+            .WithMessage("Please provide a valid Image URL.");
     }
 }
+
 "@
     # Write the content to the file
     Set-Content -Path $filePath -Value $content
@@ -1242,17 +1316,19 @@ namespace $($projectName).Domain.Enums;
 
 public enum Category
 {
-    Electronics,
-    Clothing,
-    HomeAppliances,
-    SportsAndFitness,
-    Books,
-    BeautyAndPersonalCare,
-    ToysAndGames,
-    Groceries,
-    HealthAndWellness,
-    Other
+    Electronics = 1,
+    Clothing = 2,
+    HomeAppliances = 3,
+    SportsAndFitness = 4,
+    Books = 5,
+    BeautyAndPersonalCare = 6,
+    ToysAndGames = 7,
+    Groceries = 8,
+    HealthAndWellness = 9,
+    Other = 10,
+    VideoGames = 11
 }
+
 "@
 
     Set-Content -Path $filePath -Value $content
@@ -1270,18 +1346,19 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace $($projectName).Domain.Entities;
+
 public class Product : BaseAuditableEntity
 {
-    public string Name { get; set; }
-    public string Description { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
     public decimal Price { get; set; }
     public int StockQuantity { get; set; }
-    public string SKU { get; set; }  // Stock Keeping Unit
+    public string? SKU { get; set; }
     public bool IsAvailable => StockQuantity > 0;
-    public string? Category { get; set; }
-    public string Brand { get; set; }
+    public Category Category { get; set; }
+    public string? Brand { get; set; }
     public DateTime? ReleaseDate { get; set; }
-    public string ImageUrl { get; set; }
+    public string? ImageUrl { get; set; }
 }
 "@
 
@@ -1304,16 +1381,20 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
     {
-        // Configure the Price property to have a precision of 18 with 2 decimal places.
-        builder.Property(p => p.Price)
-            .HasColumnType("decimal(18,2)")
-            .IsRequired();
-
         // You can add more property configurations as required.
         // Example: Configuring a string property to have a max length.
         // builder.Property(p => p.ProductName)
         //    .HasMaxLength(200)
         //    .IsRequired();
+
+        // Configure the Price property to have a precision of 18 with 2 decimal places.
+        builder.Property(p => p.Price)
+            .HasColumnType("decimal(18,2)")
+            .IsRequired();
+
+        // Configure the Category property to map to an integer in the database.
+        builder.Property(p => p.Category)
+            .HasConversion<int>();
     }
 }
 "@
@@ -1533,7 +1614,7 @@ public class ApplicationDbContextInitialiser
                     Price = 89.99m,
                     StockQuantity = 100,
                     SKU = "GTA5-12345",
-                    Category = "Video Games",
+                    Category = Category.VideoGames,
                     Brand = "Rockstar Games",
                     ReleaseDate = new DateTime(2013, 9, 17),
                     ImageUrl = "/path/to/gta5.jpg"
@@ -1545,7 +1626,7 @@ public class ApplicationDbContextInitialiser
                     Price = 149.99m,
                     StockQuantity = 50,
                     SKU = "GTA6-12345",
-                    Category = "Video Games",
+                    Category = Category.VideoGames,
                     Brand = "Rockstar Games",
                     ReleaseDate = new DateTime(2023, 9, 17), // Assuming a future release date
                     ImageUrl = "/path/to/gta6.jpg"
@@ -1557,7 +1638,7 @@ public class ApplicationDbContextInitialiser
                     Price = 79.99m,
                     StockQuantity = 30,
                     SKU = "BO3-12345",
-                    Category = "Video Games",
+                    Category = Category.VideoGames,
                     Brand = "Activision",
                     ReleaseDate = new DateTime(2015, 11, 6),
                     ImageUrl = "/path/to/blackops3.jpg"
@@ -1569,7 +1650,7 @@ public class ApplicationDbContextInitialiser
                     Price = 99.99m,
                     StockQuantity = 40,
                     SKU = "MW3-12345",
-                    Category = "Video Games",
+                    Category = Category.VideoGames,
                     Brand = "Activision",
                     ReleaseDate = new DateTime(2011, 11, 8),
                     ImageUrl = "/path/to/mw3.jpg"
@@ -1581,7 +1662,7 @@ public class ApplicationDbContextInitialiser
                     Price = 9.99m,
                     StockQuantity = 200,
                     SKU = "ER-12345",
-                    Category = "Video Games",
+                    Category = Category.VideoGames,
                     Brand = "FromSoftware",
                     ReleaseDate = new DateTime(2022, 2, 25),
                     ImageUrl = "/path/to/eldenring.jpg"
@@ -1620,11 +1701,23 @@ function CreateProductPage()
     public ProductDto? Model { get; set; }
     private EditContext? editContext;
     private bool isLoading = false;
+    Result<List<string>> categories = new Result<List<string>> { Data = new List<string>(), Succeeded = false };
 
-    protected override void OnInitialized()
+    protected override async void OnInitialized()
     {
         Model ??= new();
         editContext = new EditContext(Model);
+
+        try
+        {
+            categories = await ProductApi.GetAllCategoriesAsync();
+
+        }
+        catch (ApiException ex)
+        {
+            Console.WriteLine("Categories: " + ex.ToString());
+
+        }
     }
 
     private async Task SubmitAsync()
@@ -1659,34 +1752,76 @@ function CreateProductPage()
     }
 }
 
-<EditForm OnValidSubmit="@SubmitAsync" EditContext="@editContext">
-    <FluentValidationValidator />
-    <div class="mx-12 row">
-        <div class="mb-7 col-md-6">
-            <label class="form-label required">Name</label>
-            <InputText class="form-control" @bind-Value="Model.Name" />
-        </div>
-        <div class="mb-7 col-md-6">
-            <label class="form-label required">Price</label>
-            <InputNumber class="form-control" @bind-Value="Model.Price" />
-        </div>
 
-        <ValidationSummary />
+@if (categories.Data == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm OnValidSubmit="@SubmitAsync" EditContext="@editContext">
+        <FluentValidationValidator />
+        <div class="mx-12 row">
+            <div class="mb-7 col-md-6">
+                <label class="form-label required">Name</label>
+                <InputText class="form-control" @bind-Value="Model.Name" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Description</label>
+                <InputTextArea class="form-control" @bind-Value="Model.Description" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label required">Price</label>
+                <InputNumber class="form-control" @bind-Value="Model.Price" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Stock Quantity</label>
+                <InputNumber class="form-control" @bind-Value="Model.StockQuantity" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">SKU</label>
+                <InputText class="form-control" @bind-Value="Model.SKU" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Category</label>
+                <InputSelect class="form-control" @bind-Value="Model.Category">
+                    @foreach (var category in categories.Data)
+                    {
+                        <option value="@category">@category</option>
+                    }
+                </InputSelect>
+            </div>
 
-        <div class="d-flex">
-            <button type="submit" class="btn btn-primary btn-icon-light w-125px" disabled="@isLoading">
-                @if (isLoading)
-                {
-                    <span>Loading...</span>
-                }
-                else
-                {
-                    <span>Create</span>
-                }
-            </button>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Brand</label>
+                <InputText class="form-control" @bind-Value="Model.Brand" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Release Date</label>
+                <InputDate class="form-control" @bind-Value="Model.ReleaseDate" />
+            </div>
+            <div class="mb-7 col-md-6">
+                <label class="form-label">Image URL</label>
+                <InputText class="form-control" @bind-Value="Model.ImageUrl" />
+            </div>
+
+            <ValidationSummary />
+
+            <div class="d-flex">
+                <button type="submit" class="btn btn-primary btn-icon-light w-125px" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span>Loading...</span>
+                    }
+                    else
+                    {
+                        <span>Create</span>
+                    }
+                </button>
+            </div>
         </div>
-    </div>
-</EditForm>
+    </EditForm>
+}
 "@
     Set-Content -Path $fullPath -Value $createProductContent
 }
@@ -1801,8 +1936,8 @@ function CreateIndexPage()
     $fullPath = "src\$($projectName)\Client\Pages\Index.razor"
     $indexPageContent = @"
 @page "/"
-@using $($projectName).Client.Common.Interfaces;
-@using $($projectName).Shared.DTOs;
+@using TestCrudApp.Client.Common.Interfaces;
+@using TestCrudApp.Shared.DTOs;
 @using Refit;
 
 @inject IProductApi ProductApi
@@ -1823,7 +1958,15 @@ else
             <tr>
                 <th>Id</th>
                 <th>Name</th>
+                <th>Description</th>
                 <th>Price</th>
+                <th>Stock</th>
+                <th>SKU</th>
+                <th>Available</th>
+                <th>Category</th>
+                <th>Brand</th>
+                <th>Release Date</th>
+                <th>Image</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -1833,7 +1976,15 @@ else
                 <tr>
                     <td>@product.Id</td>
                     <td>@product.Name</td>
+                    <td>@product.Description</td>
                     <td>@product.Price</td>
+                    <td>@product.StockQuantity</td>
+                    <td>@product.SKU</td>
+                    <td>@product.IsAvailable</td>
+                    <td>@product.Category</td>
+                    <td>@product.Brand</td>
+                    <td>@product.ReleaseDate?.ToString("yyyy-MM-dd")</td>
+                    <td><img src="@product.ImageUrl" alt="@product.Name" width="100"></td> <!-- Adjust width as needed -->
                     <td>
                         <button class="btn btn-primary" @onclick="() => UpdateProduct(product.Id)">Edit</button>
                         <button class="btn btn-danger" @onclick="() => DeleteProduct(product.Id)">Delete</button>
