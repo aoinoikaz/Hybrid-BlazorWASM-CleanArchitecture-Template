@@ -2162,7 +2162,7 @@ function UpdateAppCss()
 }
 "@
 
-$cssPath = "src\$($projectName)\Client\wwwroot\css\app.cs"
+$cssPath = "src\$($projectName)\Client\wwwroot\css\app.css"
 
 Add-Content -Path $cssPath -Value $cssContent
 }
