@@ -2011,46 +2011,48 @@ function CreateIndexPage()
 }
 else
 {
-    <table class="table" style="overflow-x: scroll !important;">
-        <thead>
-            <tr>
-                <th>Id</th>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>SKU</th>
-                <th>Available</th>
-                <th>Category</th>
-                <th>Brand</th>
-                <th>Release Date</th>
-                <th>Image</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var product in products)
-            {
+    <div class="scrollable-table">
+        <table class="table">
+            <thead>
                 <tr>
-                    <td>@product.Id</td>
-                    <td>@product.Name</td>
-                    <td>@product.Description</td>
-                    <td>@product.Price</td>
-                    <td>@product.StockQuantity</td>
-                    <td>@product.SKU</td>
-                    <td>@product.IsAvailable</td>
-                    <td>@product.Category</td>
-                    <td>@product.Brand</td>
-                    <td>@product.ReleaseDate?.ToString("yyyy-MM-dd")</td>
-                    <td><img src="@product.ImageUrl" alt="@product.Name" width="100"></td>
-                    <td>
-                        <button class="btn btn-primary" @onclick="() => UpdateProduct(product.Id)">Edit</button>
-                        <button class="btn btn-danger" @onclick="() => DeleteProduct(product.Id)">Delete</button>
-                    </td>
+                    <th>Id</th>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                    <th>SKU</th>
+                    <th>Available</th>
+                    <th>Category</th>
+                    <th>Brand</th>
+                    <th>Release Date</th>
+                    <th>Image</th>
+                    <th>Actions</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var product in products)
+                {
+                    <tr>
+                        <td>@product.Id</td>
+                        <td>@product.Name</td>
+                        <td>@product.Description</td>
+                        <td>@product.Price</td>
+                        <td>@product.StockQuantity</td>
+                        <td>@product.SKU</td>
+                        <td>@product.IsAvailable</td>
+                        <td>@product.Category</td>
+                        <td>@product.Brand</td>
+                        <td>@product.ReleaseDate?.ToString("yyyy-MM-dd")</td>
+                        <td><img src="@product.ImageUrl" alt="@product.Name" width="100"></td>
+                        <td>
+                            <button class="btn btn-primary" @onclick="() => UpdateProduct(product.Id)">Edit</button>
+                            <button class="btn btn-danger" @onclick="() => DeleteProduct(product.Id)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 }
 
 @code {
@@ -2098,7 +2100,6 @@ else
         }
     }
 }
-
 "@
     Set-Content -Path $fullPath -Value $indexPageContent
 }
@@ -2151,6 +2152,22 @@ Function UpdateNavMenuPage()
 }
 
 
+function UpdateAppCss()
+{
+    $cssContent = @"
+
+.scrollable-table {
+    overflow-x: auto; 
+    max-width: 100%;
+}
+"@
+
+$cssPath = "src\$($projectName)\Client\wwwroot\css\app.cs"
+
+Add-Content -Path $cssPath -Value $cssContent
+}
+
+
 UpdateAppSettingsJson
 UpdateServerProgramCs
 UpdateClientProgramCs
@@ -2195,3 +2212,4 @@ CreateProductPage
 CreateUpdateProductPage
 CreateIndexPage
 UpdateNavMenuPage
+UpdateAppCss
