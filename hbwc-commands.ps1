@@ -710,6 +710,7 @@ function CreateProductCommandFile()
     $content = @"
 using $($projectName).Application.Common.Interfaces;
 using $($projectName).Domain.Entities;
+using $($projectName).Domain.Enums;
 using $($projectName).Shared.Common.Models;
 using MediatR;
 
@@ -1528,6 +1529,7 @@ function GenerateApplicationDbContextInitializer()
 
 	$newContent = @"
 using $($projectName).Domain.Entities;
+using $($projectName).Domain.Enums;
 using $($projectName).Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -1936,8 +1938,8 @@ function CreateIndexPage()
     $fullPath = "src\$($projectName)\Client\Pages\Index.razor"
     $indexPageContent = @"
 @page "/"
-@using TestCrudApp.Client.Common.Interfaces;
-@using TestCrudApp.Shared.DTOs;
+@using $($projectName).Client.Common.Interfaces;
+@using $($projectName).Shared.DTOs;
 @using Refit;
 
 @inject IProductApi ProductApi
@@ -2040,6 +2042,7 @@ else
         }
     }
 }
+
 "@
     Set-Content -Path $fullPath -Value $indexPageContent
 }
