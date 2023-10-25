@@ -1930,6 +1930,8 @@ function CreateUpdateProductPage()
 }
 else
 {
+    <img src="@product.ImageUrl" alt="@product.Name" class="img-fluid">
+
     <EditForm OnValidSubmit="@Update" EditContext="@editContext">
         <FluentValidationValidator />
         <div class="mx-12 row">
