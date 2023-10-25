@@ -1536,7 +1536,6 @@ public class ApplicationDbContext : ApiAuthorizationDbContext<ApplicationUser>, 
 }
 
 
-
 function GenerateApplicationDbContextInitializer()
 {
     $fullPath = "src\Infrastructure\Persistence\ApplicationDbContextInitialiser.cs"
@@ -1633,7 +1632,7 @@ public class ApplicationDbContextInitialiser
                     Category = Category.VideoGames,
                     Brand = "Rockstar Games",
                     ReleaseDate = new DateTime(2013, 9, 17),
-                    ImageUrl = "/path/to/gta5.jpg"
+                    ImageUrl = "https://cdn.discordapp.com/attachments/1155757087926796350/1166740990342733945/gta5.jpg?ex=654b9739&is=65392239&hm=9281cca5c6df486287ec794024826336031ac944a929521729bd6e2413360573&"
                 },
                 new Product()
                 {
@@ -1645,7 +1644,7 @@ public class ApplicationDbContextInitialiser
                     Category = Category.VideoGames,
                     Brand = "Rockstar Games",
                     ReleaseDate = new DateTime(2023, 9, 17), // Assuming a future release date
-                    ImageUrl = "/path/to/gta6.jpg"
+                    ImageUrl = "https://cdn.discordapp.com/attachments/1155757087926796350/1166741438013382666/gta6.jpg?ex=654b97a3&is=653922a3&hm=58e182e21f7bb2d5d87abf993eaf5112811b9bdf64d345cb96d8c36264cd7555&"
                 },
                 new Product()
                 {
@@ -1657,7 +1656,7 @@ public class ApplicationDbContextInitialiser
                     Category = Category.VideoGames,
                     Brand = "Activision",
                     ReleaseDate = new DateTime(2015, 11, 6),
-                    ImageUrl = "/path/to/blackops3.jpg"
+                    ImageUrl = "https://cdn.discordapp.com/attachments/1155757087926796350/1166740821358411847/Black_Ops_3.jpg?ex=654b9710&is=65392210&hm=74cf98b2824b99e432a75556cbdb97cfcc17396bd3424085c482668401c0880a&"
                 },
                 new Product()
                 {
@@ -1669,7 +1668,7 @@ public class ApplicationDbContextInitialiser
                     Category = Category.VideoGames,
                     Brand = "Activision",
                     ReleaseDate = new DateTime(2011, 11, 8),
-                    ImageUrl = "/path/to/mw3.jpg"
+                    ImageUrl = "https://cdn.discordapp.com/attachments/1155757087926796350/1166544525838254141/MWIII-REVEAL-FULL-TOUT.jpg?ex=654ae040&is=65386b40&hm=63bdae27bc2bbf6c213849cc473679fa6281d1aada7a8aef7fb37eb971f589f2&"
                 },
                 new Product()
                 {
@@ -1681,7 +1680,7 @@ public class ApplicationDbContextInitialiser
                     Category = Category.VideoGames,
                     Brand = "FromSoftware",
                     ReleaseDate = new DateTime(2022, 2, 25),
-                    ImageUrl = "/path/to/eldenring.jpg"
+                    ImageUrl = "https://cdn.discordapp.com/attachments/1155757087926796350/1166741600978878534/eldenring.webp?ex=654b97ca&is=653922ca&hm=eaf2f85e2e986ffb13d720105613ca917deb5563fca3b122edf85a1a19a2d5c9&"
                 },
             });
 
