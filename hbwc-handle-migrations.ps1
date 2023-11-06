@@ -106,8 +106,6 @@ END
 
     New-Item -Path $filePath -ItemType File -Force
     Set-Content -Path $filePath -Value $content
-
-    return $migrationFileName
 }
 
 $infrastructureProjectPath = "src/Infrastructure/Infrastructure.csproj"
@@ -116,7 +114,6 @@ $migrationsOutputPath = "Persistence/Migrations"
 
 dotnet ef migrations add "InitialCreate" -c "ApplicationDbContext" -p $infrastructureProjectPath -s $serverProjectPath -o $migrationsOutputPath
 
-$migrationFileName = CreatePaginationStoredProcedureMigration
-dotnet ef migrations add $migrationFileName -p $infrastructureProjectPath -s $serverProjectPath -o $migrationsOutputPath
+CreatePaginationStoredProcedureMigration
 
 dotnet ef database update -c ApplicationDbContext -p $infrastructureProjectPath -s $serverProjectPath
