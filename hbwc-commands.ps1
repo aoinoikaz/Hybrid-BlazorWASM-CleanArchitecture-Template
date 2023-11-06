@@ -242,10 +242,9 @@ public interface IProductApi : IPaginate<ProductDto>
 }
 
 
-
 function CreatePaginatedList() 
 {
-    $directory = "src\$projectName\Client\Common\Interfaces"
+    $directory = "src\Shared\Common\Models"
 	
     if (-Not (Test-Path $directory)) 
 	{
@@ -845,7 +844,6 @@ function CreateInfrastructureConfigureServices()
 
     $content = @"
 using $($projectName).Client.Common.Interfaces;
-
 using $($projectName).Application.Common.Interfaces;
 using $($projectName).Infrastructure.Files;
 using $($projectName).Infrastructure.Identity;
@@ -904,7 +902,7 @@ public static class ConfigureServices
     }
 }
 "@
-    New-Item -Path $filePath -ItemType File
+    #New-Item -Path $filePath -ItemType File
     Set-Content -Path $filePath -Value $content
 }
 
