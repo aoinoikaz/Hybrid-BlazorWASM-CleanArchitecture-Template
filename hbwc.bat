@@ -215,10 +215,9 @@ dotnet restore %PROJECT_NAME%.sln
 dotnet build %PROJECT_NAME%.sln
 
 
-:: Only run migrations if using SQL
 if "%DATABASE_TYPE%"=="sql" (
-    dotnet ef migrations add InitialCreate -c ApplicationDbContext -p src/Infrastructure/Infrastructure.csproj -s src/%PROJECT_NAME%/Server/%PROJECT_NAME%.Server.csproj -o Persistence/Migrations
-    dotnet ef database update -c ApplicationDbContext -p src/Infrastructure/Infrastructure.csproj -s src/%PROJECT_NAME%/Server/%PROJECT_NAME%.Server.csproj
+    powershell -ExecutionPolicy Bypass -File "..\hbwc-handle-migrations.ps1" -projectName %PROJECT_NAME%
+    
 ) else (
     echo "Using in-memory database. Skipping migrations."
 )
