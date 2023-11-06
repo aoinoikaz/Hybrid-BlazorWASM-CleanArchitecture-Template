@@ -113,6 +113,8 @@ del "Application\Common\Models\LookupDto.cs" /Q
 
 del "Infrastructure\Persistence\Configurations\TodoListConfiguration.cs" /Q
 del "Infrastructure\Persistence\Configurations\TodoItemConfiguration.cs" /Q
+del "Application\Common\Models\Result.cs" /Q
+del "Application\Common\Models\PaginatedList.cs" /Q
 del "Infrastructure\Files\Maps\TodoItemRecordMap.cs" /Q
 del "%PROJECT_NAME%\Server\Controllers\TodoItemsController.cs" /Q
 del "%PROJECT_NAME%\Server\Controllers\TodoListsController.cs" /Q
@@ -156,7 +158,10 @@ mkdir Validators
 
 del "Class1.cs" /Q
 
+
+
 cd ../../
+
 
 :: Move WeatherForecast.cs to the Shared DTOs folder
 move /y "src\Application\WeatherForecasts\Queries\GetWeatherForecasts\WeatherForecast.cs" "src\Shared\DTOs\WeatherForecast.cs"

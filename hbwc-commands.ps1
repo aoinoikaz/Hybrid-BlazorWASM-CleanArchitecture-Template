@@ -251,7 +251,7 @@ function CreatePaginatedList()
         New-Item -Path $directory -ItemType Directory
     }
 
-    $filePath = Join-Path -Path $directory -ChildPath "IPaginate.cs"
+    $filePath = Join-Path -Path $directory -ChildPath "PaginatedList.cs"
 
     $content = @"
 namespace $($projectName).Shared.Common.Models;
@@ -1787,7 +1787,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 
 function CreateProductProfile()
 {
-    $fullPath = "src\Infrastructure\Files\Maps\ProductRecordMap.cs"
+    $fullPath = "src\Application\Common\Models\ProductProfile.cs"
 
 	$newContent = @"
 using AutoMapper;
@@ -1815,7 +1815,6 @@ public class ProductProfile : Profile
     }
 }
 "@
-
 	Set-Content -Path $fullPath -Value $newContent
 }
 
@@ -2594,6 +2593,7 @@ CreateIPaginate
 CreateIPaginationService
 CreatePaginationService
 CreateGenericPaginatorRazor
+CreatePaginatedList
 
 GenerateICsvBuilder
 GenerateCsvBuilder
