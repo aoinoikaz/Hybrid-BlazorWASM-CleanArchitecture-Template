@@ -2624,7 +2624,7 @@ else
 @code {
     private PaginatedList<ProductDto>? PaginatedProducts;
     private int currentPage = 1;
-    private int pageSize = 5;
+    private int pageSize = 3;
 
     protected override async Task OnInitializedAsync()
     {
