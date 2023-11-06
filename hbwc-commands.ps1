@@ -583,7 +583,7 @@ BEGIN
 END
 
 GO
-        "@;
+        ";
 
         migrationBuilder.Sql(sql);
     }
