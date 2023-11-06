@@ -101,7 +101,6 @@ using $($projectName).Infrastructure.Persistence;
 using $($projectName).Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -322,7 +321,6 @@ function CreateIPaginationService()
     $filePath = Join-Path -Path $directory -ChildPath "IPaginationService.cs"
 
     $content = @"
-using Refit;
 using $($projectName).Shared.Common.Models;
 
 namespace $($projectName).Application.Common.Interfaces;
@@ -503,9 +501,9 @@ function CreateGenericPaginatorRazor()
     $filePath = Join-Path -Path $directory -ChildPath "GenericPaginator.razor"
 
     $content = @"
-using $($projectName).Shared.Common.Models;
+@using $($projectName).Shared.Common.Models;
 
-namespace $($projectName).Client.Pages;
+@namespace $($projectName).Client.Pages
 
 @typeparam TItem
 
@@ -843,7 +841,6 @@ function CreateInfrastructureConfigureServices()
     $filePath = Join-Path -Path $directory -ChildPath "ConfigureServices.cs"
 
     $content = @"
-using $($projectName).Client.Common.Interfaces;
 using $($projectName).Application.Common.Interfaces;
 using $($projectName).Infrastructure.Files;
 using $($projectName).Infrastructure.Identity;
@@ -902,7 +899,200 @@ public static class ConfigureServices
     }
 }
 "@
-    #New-Item -Path $filePath -ItemType File
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateIIdentityService() 
+{
+    $directory = "src\Application\Common\Interfaces"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "IIdentityService.cs"
+
+    $content = @"
+using $($projectName).Shared.Common.Models;
+
+namespace $($projectName).Application.Common.Interfaces;
+
+public interface IIdentityService
+{
+    Task<string?> GetUserNameAsync(string userId);
+
+    Task<bool> IsInRoleAsync(string userId, string role);
+
+    Task<bool> AuthorizeAsync(string userId, string policyName);
+
+    Task<(Result Result, string UserId)> CreateUserAsync(string userName, string password);
+
+    Task<Result> DeleteUserAsync(string userId);
+}
+"@
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateMappingExtensions() 
+{
+    $directory = "src\Application\Common\Mappings"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "MappingExtensions.cs"
+
+    $content = @"
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using Microsoft.EntityFrameworkCore;
+
+namespace $($projectName).Application.Common.Mappings;
+
+public static class MappingExtensions
+{
+    /*
+    public static Task<PaginatedList<TDestination>> PaginatedListAsync<TDestination>(this IQueryable<TDestination> queryable, int pageNumber, int pageSize) where TDestination : class
+        => PaginatedList<TDestination>.CreateAsync(queryable.AsNoTracking(), pageNumber, pageSize);
+    */
+    public static Task<List<TDestination>> ProjectToListAsync<TDestination>(this IQueryable queryable, IConfigurationProvider configuration) where TDestination : class
+        => queryable.ProjectTo<TDestination>(configuration).AsNoTracking().ToListAsync();
+}
+"@
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateIdentityResultExtensions() 
+{
+    $directory = "src\Infrastructure\Identity"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "IdentityResltExtensions.cs"
+
+    $content = @"
+using Microsoft.AspNetCore.Identity;
+using $($projectName).Shared.Common.Models;
+
+namespace $($projectName).Infrastructure.Identity;
+
+public static class IdentityResultExtensions
+{
+    public static Result ToApplicationResult(this IdentityResult result)
+    {
+        return result.Succeeded
+            ? Result.Success()
+            : Result.Failure(generalErrors: result.Errors.Select(e => e.Description));
+    }
+}
+"@
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateIdentityService() 
+{
+    $directory = "src\Infrastructure\Identity"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "IdentityService.cs"
+
+    $content = @"
+using $($projectName).Application.Common.Interfaces;
+using $($projectName).Shared.Common.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace $($projectName).Infrastructure.Identity;
+
+public class IdentityService : IIdentityService
+{
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IUserClaimsPrincipalFactory<ApplicationUser> _userClaimsPrincipalFactory;
+    private readonly IAuthorizationService _authorizationService;
+
+    public IdentityService(
+        UserManager<ApplicationUser> userManager,
+        IUserClaimsPrincipalFactory<ApplicationUser> userClaimsPrincipalFactory,
+        IAuthorizationService authorizationService)
+    {
+        _userManager = userManager;
+        _userClaimsPrincipalFactory = userClaimsPrincipalFactory;
+        _authorizationService = authorizationService;
+    }
+
+    public async Task<string?> GetUserNameAsync(string userId)
+    {
+        var user = await _userManager.Users.FirstAsync(u => u.Id == userId);
+
+        return user.UserName;
+    }
+
+    public async Task<(Result Result, string UserId)> CreateUserAsync(string userName, string password)
+    {
+        var user = new ApplicationUser
+        {
+            UserName = userName,
+            Email = userName,
+        };
+
+        var result = await _userManager.CreateAsync(user, password);
+
+        return (result.ToApplicationResult(), user.Id);
+    }
+
+    public async Task<bool> IsInRoleAsync(string userId, string role)
+    {
+        var user = _userManager.Users.SingleOrDefault(u => u.Id == userId);
+
+        return user != null && await _userManager.IsInRoleAsync(user, role);
+    }
+
+    public async Task<bool> AuthorizeAsync(string userId, string policyName)
+    {
+        var user = _userManager.Users.SingleOrDefault(u => u.Id == userId);
+
+        if (user == null)
+        {
+            return false;
+        }
+
+        var principal = await _userClaimsPrincipalFactory.CreateAsync(user);
+
+        var result = await _authorizationService.AuthorizeAsync(principal, policyName);
+
+        return result.Succeeded;
+    }
+
+    public async Task<Result> DeleteUserAsync(string userId)
+    {
+        var user = _userManager.Users.SingleOrDefault(u => u.Id == userId);
+
+        return user != null ? await DeleteUserAsync(user) : Result.Success();
+    }
+
+    public async Task<Result> DeleteUserAsync(ApplicationUser user)
+    {
+        var result = await _userManager.DeleteAsync(user);
+
+        return result.ToApplicationResult();
+    }
+}
+"@
     Set-Content -Path $filePath -Value $content
 }
 
@@ -1585,8 +1775,8 @@ function CreateGetProductsWithPaginationQuery()
     $content = @"
 using AutoMapper;
 using $($projectName).Application.Common.Interfaces;
-using $($projectName).Application.Common.Models;
 using $($projectName).Domain.Entities;
+using $($projectName).Shared.Common.Models;
 using $($projectName).Shared.DTOs;
 using MediatR;
 
@@ -2594,6 +2784,9 @@ CreateIPaginationService
 CreatePaginationService
 CreateGenericPaginatorRazor
 CreatePaginatedList
+CreateIIdentityService
+CreateMappingExtensions
+CreateIdentityResultExtensions
 
 GenerateICsvBuilder
 GenerateCsvBuilder
