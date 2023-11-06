@@ -101,7 +101,6 @@ using $($projectName).Infrastructure.Persistence;
 using $($projectName).Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -216,7 +215,7 @@ using $($projectName).Shared.DTOs;
 
 namespace $($projectName).Client.Common.Interfaces;
 
-public interface IProductApi
+public interface IProductApi : IPaginate<ProductDto>
 {
     [Get("/api/Products")]
     Task<IEnumerable<ProductDto>> GetProductsAsync();
@@ -235,6 +234,319 @@ public interface IProductApi
 
     [Get("/api/Products/Categories")]
     Task<Result<List<string>>> GetAllCategoriesAsync();
+}
+"@
+    New-Item -Path $filePath -ItemType File
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreatePaginatedList() 
+{
+    $directory = "src\Shared\Common\Models"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "PaginatedList.cs"
+
+    $content = @"
+namespace $($projectName).Shared.Common.Models;
+
+public class PaginatedList<T>
+{
+    public IReadOnlyCollection<T> Items { get; }
+    public int PageNumber { get; }
+    public int PageSize { get; }
+    public int TotalPages { get; }
+    public int TotalCount { get; }
+
+    public PaginatedList(IReadOnlyCollection<T> items, int totalCount, int pageNumber, int pageSize)
+    {
+        PageNumber = pageNumber;
+        PageSize = pageSize;
+        TotalCount = totalCount;
+        TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        Items = items;
+    }
+
+    public bool HasPreviousPage => PageNumber > 1;
+    public bool HasNextPage => PageNumber < TotalPages;
+}
+"@
+    New-Item -Path $filePath -ItemType File
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateIPaginate() 
+{
+    $directory = "src\$projectName\Client\Common\Interfaces"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "IPaginate.cs"
+
+    $content = @"
+using Refit;
+using $($projectName).Shared.Common.Models;
+
+namespace $($projectName).Client.Common.Interfaces;
+
+public interface IPaginate<TDto>
+{
+    [Get("/api/Products/Paginated")]
+    Task<PaginatedList<TDto>> GetPaginatedAsync(int pageNumber, int pageSize);
+}
+"@
+    New-Item -Path $filePath -ItemType File
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateIPaginationService() 
+{
+    $directory = "src\Application\Common\Interfaces"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "IPaginationService.cs"
+
+    $content = @"
+using $($projectName).Shared.Common.Models;
+
+namespace $($projectName).Application.Common.Interfaces;
+
+public interface IPaginationService
+{
+    Task<PaginatedList<T>> GetPaginatedDataAsync<T>(
+        string tableName,
+        string selectColumns,
+        int pageNumber,
+        int pageSize,
+        string? whereCondition = null,
+        string? joinCondition = null,
+        string? orderByColumn = "ID",
+        string? orderByDirection = "ASC",
+        bool fetchTotalCount = false,
+        string? knownIndexes = null) where T : new();
+}
+"@
+    New-Item -Path $filePath -ItemType File
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreatePaginationService() 
+{
+    $directory = "src\Infrastructure\Services"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "PaginationService.cs"
+
+    $content = @"
+using $($projectName).Application.Common.Interfaces;
+using $($projectName).Infrastructure.Persistence;
+using $($projectName).Shared.Common.Models;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using System.Data;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Collections.Concurrent;
+
+namespace $($projectName).Infrastructure.Services;
+
+public class PaginationService : IPaginationService
+{
+    private readonly ApplicationDbContext _dbContext;
+
+ #pragma warning disable IDE1006 // Compiler complains about the lowercase p in propertySetterCache
+    private static readonly ConcurrentDictionary<PropertyInfo, Delegate> propertySetterCache = new();
+
+    public PaginationService(ApplicationDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    public async Task<PaginatedList<T>> GetPaginatedDataAsync<T>(
+            string tableName,
+            string selectColumns,
+            int pageNumber,
+            int pageSize,
+            string? whereCondition = null,
+            string? joinCondition = null,
+            string? orderByColumn = "ID",
+            string? orderByDirection = "ASC",
+            bool fetchTotalCount = true,
+            string? knownIndexes = null) where T : new()
+    {
+        try
+        {
+            var items = new List<T>();
+
+            using var command = _dbContext.Database.GetDbConnection().CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "GenericPaginator";
+
+            command.Parameters.Add(new SqlParameter("@TableName", tableName));
+            command.Parameters.Add(new SqlParameter("@SelectColumns", selectColumns));
+            command.Parameters.Add(new SqlParameter("@WhereCondition", whereCondition ?? (object)DBNull.Value));
+            command.Parameters.Add(new SqlParameter("@JoinCondition", joinCondition ?? (object)DBNull.Value));
+            command.Parameters.Add(new SqlParameter("@OrderByColumn", orderByColumn));
+            command.Parameters.Add(new SqlParameter("@OrderByDirection", orderByDirection));
+            command.Parameters.Add(new SqlParameter("@PageNumber", pageNumber));
+            command.Parameters.Add(new SqlParameter("@PageSize", pageSize));
+            command.Parameters.Add(new SqlParameter("@FetchTotalCount", fetchTotalCount));
+            command.Parameters.Add(new SqlParameter("@KnownIndexes", knownIndexes ?? (object)DBNull.Value));
+
+            SqlParameter totalCountParam = new("@TotalCountOut", SqlDbType.Int) { Direction = ParameterDirection.Output };
+            command.Parameters.Add(totalCountParam);
+
+            if (_dbContext.Database.GetDbConnection().State != ConnectionState.Open)
+            {
+                await _dbContext.Database.GetDbConnection().OpenAsync();
+            }
+
+            using (var result = await command.ExecuteReaderAsync())
+            {
+                while (await result.ReadAsync())
+                {
+                    var item = new T();
+                    for (var i = 0; i < result.FieldCount; i++)
+                    {
+                        var propertyName = result.GetName(i);
+                        var property = typeof(T).GetProperty(propertyName);
+                        if (property != null)
+                        {
+                            var propertySetter = GetCachedPropertySetter<T>(property);
+                            var value = result.IsDBNull(i) ? null : result.GetValue(i);
+
+                            if (item != null && value != null)
+                            { 
+                                propertySetter(item, value);
+                            }
+                        }
+                    }
+                    items.Add(item);
+                }
+            }
+
+            int totalCount = totalCountParam.Value != DBNull.Value ? Convert.ToInt32(totalCountParam.Value) : -1;
+            return new PaginatedList<T>(items, totalCount, pageNumber, pageSize);
+        }
+        catch (SqlException sqlEx)
+        {
+            Console.WriteLine($"SQL Error: {sqlEx.Message}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred: {ex.Message}");
+            throw;
+        }
+    }
+
+    private static Action<T, object> CreatePropertySetter<T>(PropertyInfo propertyInfo)
+    {
+        var targetExp = Expression.Parameter(typeof(T), "target");
+        var valueExp = Expression.Parameter(typeof(object), "value");
+        var convertValueExp = Expression.Convert(valueExp, propertyInfo.PropertyType);
+        var propertySetterExp = Expression.Lambda<Action<T, object>>(
+            Expression.Assign(
+                Expression.Property(targetExp, propertyInfo),
+                convertValueExp
+            ),
+            targetExp,
+            valueExp
+        );
+        return propertySetterExp.Compile();
+    }
+
+    public static Action<T, object> GetCachedPropertySetter<T>(PropertyInfo propertyInfo)
+    {
+        return (Action<T, object>)propertySetterCache.GetOrAdd(
+            propertyInfo,
+            (pi) => CreatePropertySetter<T>(pi)
+        );
+    }
+}
+"@
+    New-Item -Path $filePath -ItemType File
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateGenericPaginatorRazor() 
+{
+    $directory = "src\$($projectName)\Client\Pages"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "GenericPaginator.razor"
+
+    $content = @"
+@using $($projectName).Shared.Common.Models;
+
+@namespace $($projectName).Client.Pages
+
+@typeparam TItem
+
+@code {
+    [Parameter] public PaginatedList<TItem>? PaginatedData { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+
+    private async Task SetPage(int page)
+    {
+        if (PaginatedData != null && page >= 1 && page <= PaginatedData.TotalPages)
+        {
+            await OnPageChanged.InvokeAsync(page);
+        }
+    }
+}
+
+@if (PaginatedData != null && PaginatedData.TotalPages > 1)
+{
+    <nav aria-label="Page navigation">
+        <ul class="pagination">
+            <!-- First Page Button -->
+            <li class="page-item @(PaginatedData.PageNumber == 1 ? "disabled" : "")">
+                <button class="page-link" @onclick="() => SetPage(1)">First</button>
+            </li>
+
+            <!-- Previous Page Button -->
+            <li class="page-item @(PaginatedData.HasPreviousPage ? "" : "disabled")">
+                <button class="page-link" @onclick="() => SetPage(PaginatedData.PageNumber - 1)">Previous</button>
+            </li>
+
+            <!-- Page Numbers (here you might want to optimize the number of page numbers to show) -->
+            <!-- ... -->
+            <!-- Next Page Button -->
+            <li class="page-item @(PaginatedData.HasNextPage ? "" : "disabled")">
+                <button class="page-link" @onclick="() => SetPage(PaginatedData.PageNumber + 1)">Next</button>
+            </li>
+
+            <!-- Last Page Button -->
+            <li class="page-item @(PaginatedData.PageNumber == PaginatedData.TotalPages ? "disabled" : "")">
+                <button class="page-link" @onclick="() => SetPage(PaginatedData.TotalPages)">Last</button>
+            </li>
+        </ul>
+    </nav>
 }
 "@
     New-Item -Path $filePath -ItemType File
@@ -439,54 +751,6 @@ public class ProductDto
 }
 
 
-function CreateProductListingDto() 
-{
-    $directory = "src\Application\Common\Models"
-	
-    if (-Not (Test-Path $directory)) 
-	{
-        New-Item -Path $directory -ItemType Directory
-    }
-
-    $filePath = Join-Path -Path $directory -ChildPath "ProductListingDto.cs"
-	
-    $content = @"
-using AutoMapper;
-using $($projectName).Application.Common.Mappings;
-using $($projectName).Domain.Entities;
-using $($projectName).Domain.Enums;
-
-namespace $($projectName).Application.Common.Models;
-
-public class ProductListingDto : IMapFrom<Product>
-{
-    public int Id { get; init; }
-    public string? Name { get; init; }
-    public decimal Price { get; init; }
-    public Category Category { get; init; }
-    public string? Brand { get; init; }
-    public bool IsAvailable { get; init; }
-    public string? ImageUrl { get; init; }
-        
-    // Automapper mapping configuration
-    public void Mapping(Profile profile)
-    {
-        profile.CreateMap<Product, ProductListingDto>()
-            .ForMember(dto => dto.Name, opt => opt.MapFrom(src => src.Name))
-            .ForMember(dto => dto.Price, opt => opt.MapFrom(src => src.Price))
-            .ForMember(dto => dto.Category, opt => opt.MapFrom(src => src.Category))
-            .ForMember(dto => dto.Brand, opt => opt.MapFrom(src => src.Brand))
-            .ForMember(dto => dto.IsAvailable, opt => opt.MapFrom(src => src.IsAvailable))
-            .ForMember(dto => dto.ImageUrl, opt => opt.MapFrom(src => src.ImageUrl));
-    }
-}
-
-"@
-    New-Item -Path $filePath -ItemType File
-    Set-Content -Path $filePath -Value $content
-}
-
-
 function CreateProductCreatedEvent() 
 {
     $directory = "src\Domain\Events"
@@ -564,6 +828,275 @@ public static class ConfigureClientServices
 }
 
 
+
+function CreateInfrastructureConfigureServices() 
+{
+    $directory = "src\Infrastructure"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "ConfigureServices.cs"
+
+    $content = @"
+using $($projectName).Application.Common.Interfaces;
+using $($projectName).Infrastructure.Files;
+using $($projectName).Infrastructure.Identity;
+using $($projectName).Infrastructure.Persistence;
+using $($projectName).Infrastructure.Persistence.Interceptors;
+using $($projectName).Infrastructure.Services;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+
+namespace Microsoft.Extensions.DependencyInjection;
+
+public static class ConfigureServices
+{
+    public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddScoped<AuditableEntitySaveChangesInterceptor>();
+
+        if (configuration.GetValue<bool>("UseInMemoryDatabase"))
+        {
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseInMemoryDatabase("DemoAppV2Db"));
+        }
+        else
+        {
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"),
+                    builder => builder.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
+        }
+
+        services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+
+        services.AddScoped<ApplicationDbContextInitialiser>();
+
+        services
+            .AddDefaultIdentity<ApplicationUser>()
+            .AddRoles<IdentityRole>()
+            .AddEntityFrameworkStores<ApplicationDbContext>();
+
+        services.AddIdentityServer()
+            .AddApiAuthorization<ApplicationUser, ApplicationDbContext>();
+
+        services.AddTransient<IDateTime, DateTimeService>();
+        services.AddTransient<ICsvFileBuilder, CsvFileBuilder>();
+        services.AddTransient<IIdentityService, IdentityService>();
+        services.AddTransient<IPaginationService, PaginationService>();
+
+        services.AddAuthentication()
+            .AddIdentityServerJwt();
+
+        services.AddAuthorization(options =>
+            options.AddPolicy("CanPurge", policy => policy.RequireRole("Administrator")));
+
+        return services;
+    }
+}
+"@
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateIIdentityService() 
+{
+    $directory = "src\Application\Common\Interfaces"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "IIdentityService.cs"
+
+    $content = @"
+using $($projectName).Shared.Common.Models;
+
+namespace $($projectName).Application.Common.Interfaces;
+
+public interface IIdentityService
+{
+    Task<string?> GetUserNameAsync(string userId);
+
+    Task<bool> IsInRoleAsync(string userId, string role);
+
+    Task<bool> AuthorizeAsync(string userId, string policyName);
+
+    Task<(Result Result, string UserId)> CreateUserAsync(string userName, string password);
+
+    Task<Result> DeleteUserAsync(string userId);
+}
+"@
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateMappingExtensions() 
+{
+    $directory = "src\Application\Common\Mappings"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "MappingExtensions.cs"
+
+    $content = @"
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using Microsoft.EntityFrameworkCore;
+
+namespace $($projectName).Application.Common.Mappings;
+
+public static class MappingExtensions
+{
+    /*
+    public static Task<PaginatedList<TDestination>> PaginatedListAsync<TDestination>(this IQueryable<TDestination> queryable, int pageNumber, int pageSize) where TDestination : class
+        => PaginatedList<TDestination>.CreateAsync(queryable.AsNoTracking(), pageNumber, pageSize);
+    */
+    public static Task<List<TDestination>> ProjectToListAsync<TDestination>(this IQueryable queryable, IConfigurationProvider configuration) where TDestination : class
+        => queryable.ProjectTo<TDestination>(configuration).AsNoTracking().ToListAsync();
+}
+"@
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateIdentityResultExtensions() 
+{
+    $directory = "src\Infrastructure\Identity"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "IdentityResultExtensions.cs"
+
+    $content = @"
+using Microsoft.AspNetCore.Identity;
+using $($projectName).Shared.Common.Models;
+
+namespace $($projectName).Infrastructure.Identity;
+
+public static class IdentityResultExtensions
+{
+    public static Result ToApplicationResult(this IdentityResult result)
+    {
+        return result.Succeeded
+            ? Result.Success()
+            : Result.Failure(generalErrors: result.Errors.Select(e => e.Description));
+    }
+}
+"@
+    Set-Content -Path $filePath -Value $content
+}
+
+
+function CreateIdentityService() 
+{
+    $directory = "src\Infrastructure\Identity"
+	
+    if (-Not (Test-Path $directory)) 
+	{
+        New-Item -Path $directory -ItemType Directory
+    }
+
+    $filePath = Join-Path -Path $directory -ChildPath "IdentityService.cs"
+
+    $content = @"
+using $($projectName).Application.Common.Interfaces;
+using $($projectName).Shared.Common.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace $($projectName).Infrastructure.Identity;
+
+public class IdentityService : IIdentityService
+{
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IUserClaimsPrincipalFactory<ApplicationUser> _userClaimsPrincipalFactory;
+    private readonly IAuthorizationService _authorizationService;
+
+    public IdentityService(
+        UserManager<ApplicationUser> userManager,
+        IUserClaimsPrincipalFactory<ApplicationUser> userClaimsPrincipalFactory,
+        IAuthorizationService authorizationService)
+    {
+        _userManager = userManager;
+        _userClaimsPrincipalFactory = userClaimsPrincipalFactory;
+        _authorizationService = authorizationService;
+    }
+
+    public async Task<string?> GetUserNameAsync(string userId)
+    {
+        var user = await _userManager.Users.FirstAsync(u => u.Id == userId);
+
+        return user.UserName;
+    }
+
+    public async Task<(Result Result, string UserId)> CreateUserAsync(string userName, string password)
+    {
+        var user = new ApplicationUser
+        {
+            UserName = userName,
+            Email = userName,
+        };
+
+        var result = await _userManager.CreateAsync(user, password);
+
+        return (result.ToApplicationResult(), user.Id);
+    }
+
+    public async Task<bool> IsInRoleAsync(string userId, string role)
+    {
+        var user = _userManager.Users.SingleOrDefault(u => u.Id == userId);
+
+        return user != null && await _userManager.IsInRoleAsync(user, role);
+    }
+
+    public async Task<bool> AuthorizeAsync(string userId, string policyName)
+    {
+        var user = _userManager.Users.SingleOrDefault(u => u.Id == userId);
+
+        if (user == null)
+        {
+            return false;
+        }
+
+        var principal = await _userClaimsPrincipalFactory.CreateAsync(user);
+
+        var result = await _authorizationService.AuthorizeAsync(principal, policyName);
+
+        return result.Succeeded;
+    }
+
+    public async Task<Result> DeleteUserAsync(string userId)
+    {
+        var user = _userManager.Users.SingleOrDefault(u => u.Id == userId);
+
+        return user != null ? await DeleteUserAsync(user) : Result.Success();
+    }
+
+    public async Task<Result> DeleteUserAsync(ApplicationUser user)
+    {
+        var result = await _userManager.DeleteAsync(user);
+
+        return result.ToApplicationResult();
+    }
+}
+"@
+    Set-Content -Path $filePath -Value $content
+}
+
+
 function CreateProductsController() 
 {
     $dirPath = "src\$($projectName)\Server\Controllers"
@@ -581,14 +1114,13 @@ function CreateProductsController()
     }
 
     $controllerContent = @"
-using Microsoft.AspNetCore.Mvc;
 using $($projectName).Application.Features.Products.Queries;
 using $($projectName).Application.Features.Products.Commands;
 using $($projectName).Application.Common.Exceptions;
 using $($projectName).Shared.DTOs;
 using $($projectName).Shared.Common.Models;
 using $($projectName).Domain.Enums;
-using System.Linq;
+using Microsoft.AspNetCore.Mvc;
 
 namespace $($projectName).Server.Controllers;
 
@@ -615,6 +1147,7 @@ public class ProductsController : ApiControllerBase
         }
     }
 
+
     [HttpPost]
     public async Task<ActionResult<Result<int>>> Create([FromBody] CreateProductCommand command)
     {
@@ -626,6 +1159,7 @@ public class ProductsController : ApiControllerBase
                 ? (ActionResult<Result<int>>)BadRequest(result)
                 : (ActionResult<Result<int>>)StatusCode(500, result.GeneralErrors);
     }
+	
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Result>> Update(int id, [FromBody] UpdateProductCommand command)
@@ -661,6 +1195,21 @@ public class ProductsController : ApiControllerBase
     {
         var categories = Enum.GetNames(typeof(Category)).ToList();
         return Ok(new Result<List<string>> { Data = categories, Succeeded = true });
+    }
+
+
+    [HttpGet("Paginated")]
+    public async Task<ActionResult<PaginatedList<ProductDto>>> GetPaginated([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+    {
+        var paginatedProducts = await Mediator.Send(new GetProductsWithPaginationQuery
+        {
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        });
+
+        return paginatedProducts == null || !paginatedProducts.Items.Any()
+            ? (ActionResult<PaginatedList<ProductDto>>)NotFound() 
+            : (ActionResult<PaginatedList<ProductDto>>)Ok(paginatedProducts);
     }
 }
 "@
@@ -1225,10 +1774,9 @@ function CreateGetProductsWithPaginationQuery()
 
     $content = @"
 using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using $($projectName).Application.Common.Interfaces;
-using $($projectName).Application.Common.Mappings;
-using $($projectName).Application.Common.Models;
+using $($projectName).Domain.Entities;
+using $($projectName).Shared.Common.Models;
 using $($projectName).Shared.DTOs;
 using MediatR;
 
@@ -1242,21 +1790,31 @@ public record GetProductsWithPaginationQuery : IRequest<PaginatedList<ProductDto
 
 public class GetProductsWithPaginationQueryHandler : IRequestHandler<GetProductsWithPaginationQuery, PaginatedList<ProductDto>>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IPaginationService _paginationService;
     private readonly IMapper _mapper;
 
-    public GetProductsWithPaginationQueryHandler(IApplicationDbContext context, IMapper mapper)
+    public GetProductsWithPaginationQueryHandler(IPaginationService paginationService, IMapper mapper)
     {
-        _context = context;
+        _paginationService = paginationService;
         _mapper = mapper;
     }
 
+
     public async Task<PaginatedList<ProductDto>> Handle(GetProductsWithPaginationQuery request, CancellationToken cancellationToken)
     {
-        return await _context.Products
-            .OrderBy(x => x.Name)
-            .ProjectTo<ProductDto>(_mapper.ConfigurationProvider)
-            .PaginatedListAsync(request.PageNumber, request.PageSize);
+        var products = await _paginationService.GetPaginatedDataAsync<Product>(
+            tableName: "Products",
+            selectColumns: "*",
+            //whereCondition: "Price > 1.00",
+            pageNumber: request.PageNumber,
+            pageSize: request.PageSize,
+            orderByColumn: "Id",
+            fetchTotalCount: true
+        );
+
+        var productDtos = products.Items.Select(p => _mapper.Map<ProductDto>(p)).ToList();
+
+        return new PaginatedList<ProductDto>(productDtos, products.TotalCount, products.PageNumber, products.PageSize);
     }
 }
 "@
@@ -1417,36 +1975,36 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 }
 
 
-function CreateProductRecordMap()
+function CreateProductProfile()
 {
-    $fullPath = "src\Infrastructure\Files\Maps\ProductRecordMap.cs"
+    $fullPath = "src\Application\Common\Models\ProductProfile.cs"
 
 	$newContent = @"
-using CsvHelper.Configuration;
-using System.Globalization;
+using AutoMapper;
+using $($projectName).Domain.Entities;
 using $($projectName).Shared.DTOs;
 
-namespace $($projectName).Infrastructure.Files.Maps;
+namespace $($projectName).Application.Common.Models;
 
-public class ProductRecordMap : ClassMap<ProductDto>
+public class ProductProfile : Profile
 {
-    public ProductRecordMap()
+    public ProductProfile()
     {
-        AutoMap(CultureInfo.InvariantCulture);
-
-        Map(m => m.Name).Name("Product Name");
-        Map(m => m.Description).Name("Description");
-        Map(m => m.Price).Name("Price");
-        Map(m => m.SKU).Name("SKU");
-        Map(m => m.Category).Name("Category");
-        Map(m => m.Brand).Name("Brand");
-        Map(m => m.ReleaseDate).Name("Release Date").TypeConverterOption.Format("yyyy-MM-dd");
-        Map(m => m.ImageUrl).Name("Image URL");
-        // ... add other mappings as needed
+        CreateMap<Product, ProductDto>()
+            .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+            .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+            .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price))
+            .ForMember(dest => dest.StockQuantity, opt => opt.MapFrom(src => src.StockQuantity))
+            .ForMember(dest => dest.SKU, opt => opt.MapFrom(src => src.SKU))
+            .ForMember(dest => dest.IsAvailable, opt => opt.MapFrom(src => src.IsAvailable))
+            .ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.Category.ToString()))
+            .ForMember(dest => dest.Brand, opt => opt.MapFrom(src => src.Brand))
+            .ForMember(dest => dest.ReleaseDate, opt => opt.MapFrom(src => src.ReleaseDate))
+            .ForMember(dest => dest.ImageUrl, opt => opt.MapFrom(src => src.ImageUrl));
     }
 }
 "@
-
 	Set-Content -Path $fullPath -Value $newContent
 }
 
@@ -1930,6 +2488,8 @@ function CreateUpdateProductPage()
 }
 else
 {
+    <img src="@product.ImageUrl" alt="@product.Name" class="img-fluid">
+
     <EditForm OnValidSubmit="@Update" EditContext="@editContext">
         <FluentValidationValidator />
         <div class="mx-12 row">
@@ -1995,6 +2555,8 @@ function CreateIndexPage()
     $indexPageContent = @"
 @page "/"
 @using $($projectName).Client.Common.Interfaces;
+@using $($projectName).Client.Pages;
+@using $($projectName).Shared.Common.Models;
 @using $($projectName).Shared.DTOs;
 @using Refit;
 
@@ -2005,7 +2567,7 @@ function CreateIndexPage()
 
 <h1>Products List</h1>
 
-@if (products == null)
+@if (PaginatedProducts == null)
 {
     <p><em>Loading...</em></p>
 }
@@ -2030,7 +2592,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var product in products)
+                @foreach (var product in PaginatedProducts.Items)
                 {
                     <tr>
                         <td>@product.Id</td>
@@ -2053,16 +2615,27 @@ else
             </tbody>
         </table>
     </div>
+
+    <GenericPaginator TItem="ProductDto"
+                      PaginatedData="PaginatedProducts"
+                      OnPageChanged="HandlePageChange" />
 }
 
 @code {
-    private List<ProductDto>? products;
+    private PaginatedList<ProductDto>? PaginatedProducts;
+    private int currentPage = 1;
+    private int pageSize = 5;
 
     protected override async Task OnInitializedAsync()
     {
+        await FetchPaginatedData(currentPage, pageSize);
+    }
+
+    private async Task FetchPaginatedData(int pageNumber, int pageSize)
+    {
         try
         {
-            products = (await ProductApi.GetProductsAsync()).ToList();
+            PaginatedProducts = await ProductApi.GetPaginatedAsync(pageNumber, pageSize);
         }
         catch (ApiException)
         {
@@ -2081,22 +2654,27 @@ else
         try
         {
             var result = await ProductApi.DeleteProductAsync(productId);
-            if (result.Succeeded)
+
+            if (result.Succeeded && PaginatedProducts != null)
             {
-                if (products != null)
-                {
-                    products = products.Where(p => p.Id != productId).ToList();
-                    StateHasChanged();
-                }
-            }
-            else
-            {
-                // Handle the error appropriately
+                var updatedItems = PaginatedProducts.Items.Where(p => p.Id != productId).ToList();
+                PaginatedProducts = new PaginatedList<ProductDto>(updatedItems, PaginatedProducts.TotalCount, currentPage, pageSize);
+                StateHasChanged();
             }
         }
         catch (ApiException)
         {
             // Handle API exception as needed
+        }
+    }
+
+
+    private async Task HandlePageChange(int pageNumber)
+    {
+        if (pageNumber != currentPage)
+        {
+            currentPage = pageNumber;
+            await FetchPaginatedData(pageNumber, pageSize);
         }
     }
 }
@@ -2182,6 +2760,7 @@ CreateIProductApi
 CreateResultClass
 CreateProductDtoClass
 CreateConfigureClientServices
+CreateInfrastructureConfigureServices
 CreateProductsController
 CreateProductCommandFile
 CreateProductCommandValidatorFile
@@ -2198,9 +2777,17 @@ CreateUpdateProductCommandValidator
 CreateProductDtoValidator
 CreateProductConfigurationFile
 CreateProductCreatedEvent
-CreateProductRecordMap
-CreateProductListingDto
+CreateProductProfile
 CreateCategoryEnum
+CreateIPaginate
+CreateIPaginationService
+CreatePaginationService
+CreateGenericPaginatorRazor
+CreatePaginatedList
+CreateIIdentityService
+CreateMappingExtensions
+CreateIdentityResultExtensions
+CreateIdentityService
 
 GenerateICsvBuilder
 GenerateCsvBuilder
