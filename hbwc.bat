@@ -93,9 +93,9 @@ del %PROJECT_NAME%.sln
 rmdir /s /q Shared
 
 ::Remove default migration as we will re migrate and update manually
-cd ../Infrastructure/Persistence
-rmdir /s /q Migrations
-cd ../../
+cd ../Infrastructure/Persistence/Migrations
+del *.* /Q
+cd ../../../
 
 :: at src now
 cd Application
@@ -225,7 +225,3 @@ if "%DATABASE_TYPE%"=="sql" (
 
 echo "Project setup complete."
 pause
-
-
-:: NEW TODO LIST
-:: switch out result class references to new result in shared library (thic task)
