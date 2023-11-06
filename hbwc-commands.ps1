@@ -977,7 +977,7 @@ function CreateIdentityResultExtensions()
         New-Item -Path $directory -ItemType Directory
     }
 
-    $filePath = Join-Path -Path $directory -ChildPath "IdentityResltExtensions.cs"
+    $filePath = Join-Path -Path $directory -ChildPath "IdentityResultExtensions.cs"
 
     $content = @"
 using Microsoft.AspNetCore.Identity;
@@ -2787,6 +2787,7 @@ CreatePaginatedList
 CreateIIdentityService
 CreateMappingExtensions
 CreateIdentityResultExtensions
+CreateIdentityService
 
 GenerateICsvBuilder
 GenerateCsvBuilder
