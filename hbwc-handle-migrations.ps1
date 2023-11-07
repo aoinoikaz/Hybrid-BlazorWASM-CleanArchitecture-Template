@@ -111,8 +111,9 @@ $infrastructureProjectPath = "src/Infrastructure/Infrastructure.csproj"
 $serverProjectPath = "src/$projectName/Server/$projectName.Server.csproj"
 $migrationsOutputPath = "Persistence/Migrations"
 
-dotnet ef migrations add "InitialCreate" -c "ApplicationDbContext" -p $infrastructureProjectPath -s $serverProjectPath -o $migrationsOutputPath
+dotnet ef migrations add "InitialCreate" -c "ApplicationDbContext" -p $infrastructureProjectPath -s $serverProjectPath -o $migrationsOutputPath --verbose
 
 CreatePaginationStoredProcedureMigration
 
-dotnet ef database update -c ApplicationDbContext -p $infrastructureProjectPath -s $serverProjectPath
+dotnet build $infrastructureProjectPath
+dotnet ef database update -c ApplicationDbContext -p $infrastructureProjectPath -s $serverProjectPath --verbose

@@ -2550,8 +2550,7 @@ else
 }
 
 
-
-function CreateIndexPage() 
+function CreateIndexPage()
 {
     $fullPath = "src\$($projectName)\Client\Pages\Index.razor"
     $indexPageContent = @"

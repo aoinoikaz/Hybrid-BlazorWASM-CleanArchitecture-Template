@@ -64,7 +64,6 @@ if "%USE_AUTH%"=="b2c" (
     dotnet new blazorwasm -n %PROJECT_NAME% --hosted --output %PROJECT_NAME%
 )
 
-
 cd %PROJECT_NAME%/Client
 mkdir Features\Feature
 cd Features/Feature
@@ -72,7 +71,6 @@ mkdir Components
 mkdir Pages
 
 cd ../../../../
-
 
 :: Move over some dependencies we need from base ca-sln template
 mkdir "%PROJECT_NAME%\Server\Filters"
@@ -122,7 +120,6 @@ del "%PROJECT_NAME%\Server\Controllers\WeatherForecastController.cs" /Q
 del "%PROJECT_NAME%\Client\Pages\FetchData.razor" /Q
 del "%PROJECT_NAME%\Client\Pages\Counter.razor" /Q
 
-
 :: Remove the initial references as we re configure them for our hybrid clean architecture
 cd %PROJECT_NAME%/Client
 dotnet remove reference ../Shared/%PROJECT_NAME%.Shared.csproj
@@ -160,11 +157,9 @@ del "Class1.cs" /Q
 
 cd ../../
 
-
 :: Was easier to clean up the commands and put them
 :: in their own powershell file.
 powershell -ExecutionPolicy Bypass -File "..\hbwc-commands.ps1" -projectName %PROJECT_NAME% -databaseType %DATABASE_TYPE% -instanceName %INSTANCE_NAME%
-
 
 :: Setup clean arch reference structure
 cd src/%PROJECT_NAME%/Client/
@@ -201,7 +196,6 @@ dotnet add package Blazored.FluentValidation --version 2.1.0 --source https://ap
 dotnet add package Refit --version 7.0.0 --source https://api.nuget.org/v3/index.json
 dotnet add package Refit.HttpClientFactory --version 7.0.0 --source https://api.nuget.org/v3/index.json
 
-
 cd ../Server
 dotnet add package Microsoft.EntityFrameworkCore.Design --version 7.0.12 --source https://api.nuget.org/v3/index.json
 
@@ -210,14 +204,12 @@ dotnet add package FluentValidation.DependencyInjectionExtensions --version 11.5
 
 cd ../../
 
-dotnet clean %PROJECT_NAME%.sln
 dotnet restore %PROJECT_NAME%.sln
-dotnet build %PROJECT_NAME%.sln
-
 
 if "%DATABASE_TYPE%"=="sql" (
     powershell -ExecutionPolicy Bypass -File "..\hbwc-handle-migrations.ps1" -projectName %PROJECT_NAME%
-    
+    dotnet clean %PROJECT_NAME%.sln
+    dotnet build %PROJECT_NAME%.sln
 ) else (
     echo "Using in-memory database. Skipping migrations."
 )
