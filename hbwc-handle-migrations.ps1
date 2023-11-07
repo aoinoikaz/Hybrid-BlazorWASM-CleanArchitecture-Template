@@ -93,7 +93,6 @@ BEGIN
     END
 END
 ";
-
         migrationBuilder.Sql(sql);
     }
 
