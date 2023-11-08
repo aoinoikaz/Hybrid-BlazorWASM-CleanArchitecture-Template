@@ -64,7 +64,6 @@ if "%USE_AUTH%"=="b2c" (
     dotnet new blazorwasm -n %PROJECT_NAME% --hosted --output %PROJECT_NAME%
 )
 
-
 cd %PROJECT_NAME%/Client
 mkdir Features\Feature
 cd Features/Feature
@@ -72,7 +71,6 @@ mkdir Components
 mkdir Pages
 
 cd ../../../../
-
 
 :: Move over some dependencies we need from base ca-sln template
 mkdir "%PROJECT_NAME%\Server\Filters"
@@ -93,9 +91,9 @@ del %PROJECT_NAME%.sln
 rmdir /s /q Shared
 
 ::Remove default migration as we will re migrate and update manually
-cd ../Infrastructure/Persistence
-rmdir /s /q Migrations
-cd ../../
+cd ../Infrastructure/Persistence/Migrations
+del *.* /Q
+cd ../../../
 
 :: at src now
 cd Application
@@ -121,7 +119,6 @@ del "%PROJECT_NAME%\Server\Controllers\TodoListsController.cs" /Q
 del "%PROJECT_NAME%\Server\Controllers\WeatherForecastController.cs" /Q
 del "%PROJECT_NAME%\Client\Pages\FetchData.razor" /Q
 del "%PROJECT_NAME%\Client\Pages\Counter.razor" /Q
-
 
 :: Remove the initial references as we re configure them for our hybrid clean architecture
 cd %PROJECT_NAME%/Client
@@ -160,11 +157,9 @@ del "Class1.cs" /Q
 
 cd ../../
 
-
 :: Was easier to clean up the commands and put them
 :: in their own powershell file.
 powershell -ExecutionPolicy Bypass -File "..\hbwc-commands.ps1" -projectName %PROJECT_NAME% -databaseType %DATABASE_TYPE% -instanceName %INSTANCE_NAME%
-
 
 :: Setup clean arch reference structure
 cd src/%PROJECT_NAME%/Client/
@@ -201,7 +196,6 @@ dotnet add package Blazored.FluentValidation --version 2.1.0 --source https://ap
 dotnet add package Refit --version 7.0.0 --source https://api.nuget.org/v3/index.json
 dotnet add package Refit.HttpClientFactory --version 7.0.0 --source https://api.nuget.org/v3/index.json
 
-
 cd ../Server
 dotnet add package Microsoft.EntityFrameworkCore.Design --version 7.0.12 --source https://api.nuget.org/v3/index.json
 
@@ -210,22 +204,15 @@ dotnet add package FluentValidation.DependencyInjectionExtensions --version 11.5
 
 cd ../../
 
-dotnet clean %PROJECT_NAME%.sln
 dotnet restore %PROJECT_NAME%.sln
-dotnet build %PROJECT_NAME%.sln
 
-
-:: Only run migrations if using SQL
 if "%DATABASE_TYPE%"=="sql" (
-    dotnet ef migrations add InitialCreate -c ApplicationDbContext -p src/Infrastructure/Infrastructure.csproj -s src/%PROJECT_NAME%/Server/%PROJECT_NAME%.Server.csproj -o Persistence/Migrations
-    dotnet ef database update -c ApplicationDbContext -p src/Infrastructure/Infrastructure.csproj -s src/%PROJECT_NAME%/Server/%PROJECT_NAME%.Server.csproj
+    powershell -ExecutionPolicy Bypass -File "..\hbwc-handle-migrations.ps1" -projectName %PROJECT_NAME%
+    dotnet clean %PROJECT_NAME%.sln
+    dotnet build %PROJECT_NAME%.sln
 ) else (
     echo "Using in-memory database. Skipping migrations."
 )
 
 echo "Project setup complete."
 pause
-
-
-:: NEW TODO LIST
-:: switch out result class references to new result in shared library (thic task)

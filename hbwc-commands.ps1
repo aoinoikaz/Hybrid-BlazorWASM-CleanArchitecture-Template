@@ -489,6 +489,8 @@ public class PaginationService : IPaginationService
 }
 
 
+
+
 function CreateGenericPaginatorRazor() 
 {
     $directory = "src\$($projectName)\Client\Pages"
@@ -2548,8 +2550,7 @@ else
 }
 
 
-
-function CreateIndexPage() 
+function CreateIndexPage()
 {
     $fullPath = "src\$($projectName)\Client\Pages\Index.razor"
     $indexPageContent = @"
@@ -2800,3 +2801,4 @@ CreateUpdateProductPage
 CreateIndexPage
 UpdateNavMenuPage
 UpdateAppCss
+
