@@ -93,8 +93,6 @@ END";
     }
 }
 "@ 
-
-    # Replace the content of the migration file with the new SQL script
     Set-Content -Path $filePath -Value $content -Force
 }
 
