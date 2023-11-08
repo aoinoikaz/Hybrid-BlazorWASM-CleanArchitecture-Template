@@ -3,24 +3,25 @@ param(
 )
 
 
-function CreatePaginationStoredProcedureMigration {
+function ModifyPaginationStoredProcedure {
     $migrationsDirectory = "src\Infrastructure\Persistence\Migrations"
+    $specificMigrationName = "AddPaginationStoredProcedure"  # The specific name of the migration
+    $migrationFiles = Get-ChildItem -Path $migrationsDirectory -Filter "*_$specificMigrationName.cs"
 
-    if (-Not (Test-Path $migrationsDirectory)) {
-        New-Item -Path $migrationsDirectory -ItemType Directory
+    if ($migrationFiles.Count -eq 0) {
+        Write-Host "Migration file $specificMigrationName not found."
+        return
     }
 
-    $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-    $migrationName = "AddPaginationStoredProcedure"
-    $migrationFileName = "$timestamp" + "_" + "$migrationName.cs"
-    $filePath = Join-Path -Path $migrationsDirectory -ChildPath $migrationFileName
+    $migrationFile = $migrationFiles | Select-Object -First 1
+    $filePath = Join-Path -Path $migrationsDirectory -ChildPath $migrationFile.Name
 
     $content = @"
 using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace $($projectName).Infrastructure.Persistence.Migrations;
+namespace $projectName.Infrastructure.Persistence.Migrations;
 
-public partial class AddPaginationStoredProcedure : Migration
+public partial class $specificMigrationName : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
@@ -91,19 +92,21 @@ END";
         migrationBuilder.Sql("DROP PROCEDURE IF EXISTS [dbo].[GenericPaginator]");
     }
 }
-"@
+"@ 
 
-    New-Item -Path $filePath -ItemType File -Force
-    Set-Content -Path $filePath -Value $content
+    # Replace the content of the migration file with the new SQL script
+    Set-Content -Path $filePath -Value $content -Force
 }
+
 
 $infrastructureProjectPath = "src/Infrastructure/Infrastructure.csproj"
 $serverProjectPath = "src/$projectName/Server/$projectName.Server.csproj"
 $migrationsOutputPath = "Persistence/Migrations"
 
-dotnet ef migrations add "InitialCreate" -c "ApplicationDbContext" -p $infrastructureProjectPath -s $serverProjectPath -o $migrationsOutputPath --verbose
+dotnet ef migrations add "InitialCreate" -c "ApplicationDbContext" -p $infrastructureProjectPath -s $serverProjectPath -o $migrationsOutputPath
+dotnet ef migrations add "AddPaginationStoredProcedure" -c "ApplicationDbContext" -p $infrastructureProjectPath -s $serverProjectPath -o $migrationsOutputPath
 
-CreatePaginationStoredProcedureMigration
+ModifyPaginationStoredProcedure
 
 dotnet build $infrastructureProjectPath
 dotnet ef database update -c ApplicationDbContext -p $infrastructureProjectPath -s $serverProjectPath --verbose
