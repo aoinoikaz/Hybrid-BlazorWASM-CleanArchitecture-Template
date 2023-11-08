@@ -25,7 +25,6 @@ if "%DATABASE_TYPE%"=="sql" (
 )
 
 
-:: Initialize variable to check if template exists
 set "templateExists="
 
 :: Check if the template exists in the global list of templates
@@ -95,7 +94,7 @@ cd ../Infrastructure/Persistence/Migrations
 del *.* /Q
 cd ../../../
 
-:: at src now
+
 cd Application
 rmdir /s /q TodoItems
 rmdir /s /q TodoLists
@@ -103,6 +102,7 @@ rmdir /s /q WeatherForecasts
 
 cd ../
 
+:: Delete more crap we dont need
 del "Domain\Events\*.*" /Q
 del "Domain\Entities\TodoItem.cs" /Q
 del "Domain\Entities\TodoList.cs" /Q
@@ -120,7 +120,7 @@ del "%PROJECT_NAME%\Server\Controllers\WeatherForecastController.cs" /Q
 del "%PROJECT_NAME%\Client\Pages\FetchData.razor" /Q
 del "%PROJECT_NAME%\Client\Pages\Counter.razor" /Q
 
-:: Remove the initial references as we re configure them for our hybrid clean architecture
+:: Remove the initial references as we will configure them for our hybrid clean architecture
 cd %PROJECT_NAME%/Client
 dotnet remove reference ../Shared/%PROJECT_NAME%.Shared.csproj
 cd ../Server
