@@ -29,12 +29,12 @@ set "templateExists="
 
 :: Check if the template exists in the global list of templates
 for /f %%i in ('dotnet new --list ^| findstr "ca-sln"') do (
-    set templateExists=%%i
+   set templateExists=%%i
 )
 
 :: Install the template if it doesn't exist
 if not defined templateExists (
-    dotnet new install "Clean.Architecture.Solution.Template"
+    dotnet new install "Clean.Architecture.Solution.Template::8.0.0"
 )
 
 :: Create base clean arch template
@@ -46,7 +46,7 @@ del %PROJECT_NAME%.sln
 
 :: Clear the old webui tests folder
 cd tests
-rmdir /s /q WebUI.AcceptanceTests
+rmdir /s /q Web.AcceptanceTests
 cd ../
 
 
