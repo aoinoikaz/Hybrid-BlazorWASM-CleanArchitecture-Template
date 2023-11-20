@@ -2,10 +2,9 @@ param(
     [string]$projectName
 )
 
-
 function ModifyPaginationStoredProcedure {
     $migrationsDirectory = "src\Infrastructure\Persistence\Migrations"
-    $specificMigrationName = "AddPaginationStoredProcedure"  # The specific name of the migration
+    $specificMigrationName = "AddPaginationStoredProcedure"
     $migrationFiles = Get-ChildItem -Path $migrationsDirectory -Filter "*_$specificMigrationName.cs"
 
     if ($migrationFiles.Count -eq 0) {
@@ -16,6 +15,7 @@ function ModifyPaginationStoredProcedure {
     $migrationFile = $migrationFiles | Select-Object -First 1
     $filePath = Join-Path -Path $migrationsDirectory -ChildPath $migrationFile.Name
 
+    # Multi-line string in PowerShell uses @", each double-quote in SQL must be doubled
     $content = @"
 using Microsoft.EntityFrameworkCore.Migrations;
 
@@ -39,7 +39,7 @@ BEGIN
     @PageNumber INT = 1,
     @PageSize INT = 10,
     @KnownIndexes NVARCHAR(MAX) = NULL,
-	@FetchTotalCount BIT = 1,
+    @FetchTotalCount BIT = 1,
     @TotalCountOut INT OUTPUT
 AS
 BEGIN
@@ -48,18 +48,15 @@ BEGIN
     DECLARE @SqlQuery NVARCHAR(MAX);
     DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
 
-    -- Constructing the FROM clause with separate QUOTENAME calls for schema and table
-    SET @SqlQuery = 'SELECT ' + @SelectColumns + 
-                    ' FROM ' + QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName) +
-                    ISNULL(' WITH (INDEX(' + @KnownIndexes + ')) ', '') +
-                    ISNULL(@JoinCondition, '') +
-                    ' WHERE 1=1 ' + 
-                    ISNULL(' AND (' + @WhereCondition + ')', '') +
-                    ' ORDER BY ' + QUOTENAME(@OrderByColumn) + ' ' + ISNULL(@OrderByDirection, 'ASC') +
-                    ' OFFSET ' + CAST(@Offset AS NVARCHAR(10)) + ' ROWS' +
-                    ' FETCH NEXT ' + CAST(@PageSize AS NVARCHAR(10)) + ' ROWS ONLY';
-
-	PRINT @SqlQuery
+    SET @SqlQuery = ''SELECT '' + @SelectColumns + 
+                    '' FROM '' + QUOTENAME(@SchemaName) + ''.'' + QUOTENAME(@TableName) +
+                    ISNULL('' WITH (INDEX('' + @KnownIndexes + '')) '', '''') +
+                    ISNULL(@JoinCondition, '''') +
+                    '' WHERE 1=1 '' +
+                    ISNULL('' AND ('' + @WhereCondition + '')'', '''') +
+                    '' ORDER BY '' + QUOTENAME(@OrderByColumn) + '' '' + ISNULL(@OrderByDirection, ''ASC'') +
+                    '' OFFSET '' + CAST(@Offset AS NVARCHAR(10)) + '' ROWS'' +
+                    '' FETCH NEXT '' + CAST(@PageSize AS NVARCHAR(10)) + '' ROWS ONLY'';
 
     BEGIN TRY
         EXEC sp_executesql @SqlQuery;
@@ -68,27 +65,23 @@ BEGIN
         THROW;
     END CATCH
 
-	IF @FetchTotalCount = 1
-	BEGIN
-		-- Constructing the COUNT query with separate QUOTENAME calls for schema and table
-		SET @SqlQuery = 'SELECT @TotalCountOut = COUNT(*) FROM ' + QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName) +
-						ISNULL(@JoinCondition, '') +
-						' WHERE 1=1 ' + 
-						ISNULL(' AND (' + @WhereCondition + ')', '');
+    IF @FetchTotalCount = 1
+    BEGIN
+        SET @SqlQuery = ''SELECT @TotalCountOut = COUNT(*) FROM '' + QUOTENAME(@SchemaName) + ''.'' + QUOTENAME(@TableName) +
+                        ISNULL(@JoinCondition, '''') +
+                        '' WHERE 1=1 '' +
+                        ISNULL('' AND ('' + @WhereCondition + '')'', '''')'';
 
+        BEGIN TRY
+            EXEC sp_executesql @SqlQuery, N''@TotalCountOut INT OUTPUT'', @TotalCountOut=@TotalCountOut OUTPUT;
+        END TRY
+        BEGIN CATCH
+            THROW;
+        END CATCH
+    END
+END')";
 
-		PRINT @SqlQuery
-
-		BEGIN TRY
-			EXEC sp_executesql @SqlQuery, N'@TotalCountOut INT OUTPUT', @TotalCountOut=@TotalCountOut OUTPUT;
-		END TRY
-		BEGIN CATCH
-			THROW;
-		END CATCH
-	END
-END')
-END";
-        migrationBuilder.Sql(sql);
+    migrationBuilder.Sql(sql);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
@@ -96,7 +89,7 @@ END";
         migrationBuilder.Sql("DROP PROCEDURE IF EXISTS [dbo].[GenericPaginator]");
     }
 }
-"@ 
+"@
     Set-Content -Path $filePath -Value $content -Force
 }
 
@@ -111,4 +104,4 @@ dotnet ef migrations add "AddPaginationStoredProcedure" -c "ApplicationDbContext
 ModifyPaginationStoredProcedure
 
 dotnet build $infrastructureProjectPath
-dotnet ef database update -c ApplicationDbContext -p $infrastructureProjectPath -s $serverProjectPath --verbose
+dotnet ef database update -c ApplicationDbContext -p $infrastructureProjectPath -s $serverProjectPath
