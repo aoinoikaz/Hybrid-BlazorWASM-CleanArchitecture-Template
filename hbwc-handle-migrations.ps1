@@ -29,59 +29,63 @@ public partial class $specificMigrationName : Migration
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[GenericPaginator]') AND type in (N'P', N'PC'))
 BEGIN
     EXEC('CREATE PROCEDURE [dbo].[GenericPaginator]
+        @SchemaName NVARCHAR(128),
     @TableName NVARCHAR(128),
     @SelectColumns NVARCHAR(MAX),
     @WhereCondition NVARCHAR(MAX) = NULL,
     @JoinCondition NVARCHAR(MAX) = NULL,
-    @OrderByColumn NVARCHAR(128) = ''ID'',
-    @OrderByDirection NVARCHAR(4) = ''ASC'',
+    @OrderByColumn NVARCHAR(128),
+    @OrderByDirection NVARCHAR(4) = NULL,
     @PageNumber INT = 1,
     @PageSize INT = 10,
-    @FetchTotalCount BIT = 0,
     @KnownIndexes NVARCHAR(MAX) = NULL,
+	@FetchTotalCount BIT = 1,
     @TotalCountOut INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
+
     DECLARE @SqlQuery NVARCHAR(MAX);
     DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
-    
-    SET @SqlQuery = ''SELECT '' + @SelectColumns + 
-                    '' FROM '' + QUOTENAME(@TableName) +
-                    ISNULL('' WITH (INDEX('' + @KnownIndexes + '')) '', '''') +
-                    ISNULL(@JoinCondition, '''') +
-                    '' WHERE 1=1 '' + 
-                    ISNULL('' AND ('' + @WhereCondition + '')'', '''') +
-                    '' ORDER BY '' + QUOTENAME(@OrderByColumn) + '' '' + @OrderByDirection +
-                    '' OFFSET '' + CAST(@Offset AS NVARCHAR(10)) + '' ROWS'' +
-                    '' FETCH NEXT '' + CAST(@PageSize AS NVARCHAR(10)) + '' ROWS ONLY'';
-    
+
+    -- Constructing the FROM clause with separate QUOTENAME calls for schema and table
+    SET @SqlQuery = 'SELECT ' + @SelectColumns + 
+                    ' FROM ' + QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName) +
+                    ISNULL(' WITH (INDEX(' + @KnownIndexes + ')) ', '') +
+                    ISNULL(@JoinCondition, '') +
+                    ' WHERE 1=1 ' + 
+                    ISNULL(' AND (' + @WhereCondition + ')', '') +
+                    ' ORDER BY ' + QUOTENAME(@OrderByColumn) + ' ' + ISNULL(@OrderByDirection, 'ASC') +
+                    ' OFFSET ' + CAST(@Offset AS NVARCHAR(10)) + ' ROWS' +
+                    ' FETCH NEXT ' + CAST(@PageSize AS NVARCHAR(10)) + ' ROWS ONLY';
+
+	PRINT @SqlQuery
+
     BEGIN TRY
         EXEC sp_executesql @SqlQuery;
     END TRY
     BEGIN CATCH
         THROW;
     END CATCH
-    
-    IF @FetchTotalCount = 1
-    BEGIN
-        SET @SqlQuery = ''SELECT @TotalCountOut = COUNT(*) FROM '' + QUOTENAME(@TableName) +
-                        ISNULL(@JoinCondition, '''') +
-                        '' WHERE 1=1 '' + 
-                        ISNULL('' AND ('' + @WhereCondition + '')'', '''');
 
-        BEGIN TRY
-            EXEC sp_executesql @SqlQuery, N''@TotalCountOut INT OUTPUT'', @TotalCountOut=@TotalCountOut OUTPUT;
-        END TRY
-        BEGIN CATCH
-            THROW;
-        END CATCH
-    END
-    ELSE
-    BEGIN
-        SET @TotalCountOut = -1; 
-    END
+	IF @FetchTotalCount = 1
+	BEGIN
+		-- Constructing the COUNT query with separate QUOTENAME calls for schema and table
+		SET @SqlQuery = 'SELECT @TotalCountOut = COUNT(*) FROM ' + QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName) +
+						ISNULL(@JoinCondition, '') +
+						' WHERE 1=1 ' + 
+						ISNULL(' AND (' + @WhereCondition + ')', '');
+
+
+		PRINT @SqlQuery
+
+		BEGIN TRY
+			EXEC sp_executesql @SqlQuery, N'@TotalCountOut INT OUTPUT', @TotalCountOut=@TotalCountOut OUTPUT;
+		END TRY
+		BEGIN CATCH
+			THROW;
+		END CATCH
+	END
 END')
 END";
         migrationBuilder.Sql(sql);
