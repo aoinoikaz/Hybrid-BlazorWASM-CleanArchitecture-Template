@@ -28,58 +28,60 @@ public partial class $specificMigrationName : Migration
         var sql = @"
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[GenericPaginator]') AND type in (N'P', N'PC'))
 BEGIN
-    EXEC('CREATE PROCEDURE [dbo].[GenericPaginator]
-    @SchemaName NVARCHAR(128),
-    @TableName NVARCHAR(128),
-    @SelectColumns NVARCHAR(MAX),
-    @WhereCondition NVARCHAR(MAX) = NULL,
-    @JoinCondition NVARCHAR(MAX) = NULL,
-    @OrderByColumn NVARCHAR(128),
-    @OrderByDirection NVARCHAR(4) = NULL,
-    @PageNumber INT = 1,
-    @PageSize INT = 10,
-    @KnownIndexes NVARCHAR(MAX) = NULL,
-    @FetchTotalCount BIT = 1,
-    @TotalCountOut INT OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
+    EXEC('
+        CREATE PROCEDURE [dbo].[GenericPaginator]
+            @SchemaName NVARCHAR(128),
+            @TableName NVARCHAR(128),
+            @SelectColumns NVARCHAR(MAX),
+            @WhereCondition NVARCHAR(MAX) = NULL,
+            @JoinCondition NVARCHAR(MAX) = NULL,
+            @OrderByColumn NVARCHAR(128),
+            @OrderByDirection NVARCHAR(4) = NULL,
+            @PageNumber INT = 1,
+            @PageSize INT = 10,
+            @KnownIndexes NVARCHAR(MAX) = NULL,
+            @FetchTotalCount BIT = 1,
+            @TotalCountOut INT OUTPUT
+        AS
+        BEGIN
+            SET NOCOUNT ON;
 
-    DECLARE @SqlQuery NVARCHAR(MAX);
-    DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
+            DECLARE @SqlQuery NVARCHAR(MAX);
+            DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
 
-    SET @SqlQuery = ''SELECT '' + @SelectColumns + 
-                    '' FROM '' + QUOTENAME(@SchemaName) + ''.'' + QUOTENAME(@TableName) +
-                    ISNULL('' WITH (INDEX('' + @KnownIndexes + '')) '', '''') +
-                    ISNULL(@JoinCondition, '''') +
-                    '' WHERE 1=1 '' +
-                    ISNULL('' AND ('' + @WhereCondition + '')'', '''') +
-                    '' ORDER BY '' + QUOTENAME(@OrderByColumn) + '' '' + ISNULL(@OrderByDirection, ''ASC'') +
-                    '' OFFSET '' + CAST(@Offset AS NVARCHAR(10)) + '' ROWS'' +
-                    '' FETCH NEXT '' + CAST(@PageSize AS NVARCHAR(10)) + '' ROWS ONLY'';
+            SET @SqlQuery = ''SELECT '' + @SelectColumns + 
+                            '' FROM '' + QUOTENAME(@SchemaName) + ''.'' + QUOTENAME(@TableName) +
+                            ISNULL('' WITH (INDEX('' + @KnownIndexes + '')) '', '''') +
+                            ISNULL(@JoinCondition, '''') +
+                            '' WHERE 1=1 '' +
+                            ISNULL('' AND ('' + @WhereCondition + '')'', '''') +
+                            '' ORDER BY '' + QUOTENAME(@OrderByColumn) + '' '' + ISNULL(@OrderByDirection, ''ASC'') +
+                            '' OFFSET '' + CAST(@Offset AS NVARCHAR(10)) + '' ROWS'' +
+                            '' FETCH NEXT '' + CAST(@PageSize AS NVARCHAR(10)) + '' ROWS ONLY'';
 
-    BEGIN TRY
-        EXEC sp_executesql @SqlQuery;
-    END TRY
-    BEGIN CATCH
-        THROW;
-    END CATCH
+            BEGIN TRY
+                EXEC sp_executesql @SqlQuery;
+            END TRY
+            BEGIN CATCH
+                THROW;
+            END CATCH
 
-    IF @FetchTotalCount = 1
-    BEGIN
-        SET @SqlQuery = ''SELECT @TotalCountOut = COUNT(*) FROM '' + QUOTENAME(@SchemaName) + ''.'' + QUOTENAME(@TableName) +
-                        ISNULL(@JoinCondition, '''') +
-                        '' WHERE 1=1 '' +
-                        ISNULL('' AND ('' + @WhereCondition + '')'', '''')'';
+            IF @FetchTotalCount = 1
+            BEGIN
+                SET @SqlQuery = ''SELECT @TotalCountOut = COUNT(*) FROM '' + QUOTENAME(@SchemaName) + ''.'' + QUOTENAME(@TableName) +
+                                ISNULL(@JoinCondition, '''') +
+                                '' WHERE 1=1 '' +
+                                ISNULL('' AND ('' + @WhereCondition + '')'', '''');
 
-        BEGIN TRY
-            EXEC sp_executesql @SqlQuery, N''@TotalCountOut INT OUTPUT'', @TotalCountOut=@TotalCountOut OUTPUT;
-        END TRY
-        BEGIN CATCH
-            THROW;
-        END CATCH
-    END
-END')";
+                BEGIN TRY
+                    EXEC sp_executesql @SqlQuery, N''@TotalCountOut INT OUTPUT'', @TotalCountOut=@TotalCountOut OUTPUT;
+                END TRY
+                BEGIN CATCH
+                    THROW;
+                END CATCH
+            END
+        END')
+    END";
 
     migrationBuilder.Sql(sql);
     }
