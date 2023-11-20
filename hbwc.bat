@@ -206,7 +206,7 @@ cd ../../
 dotnet restore %PROJECT_NAME%.sln
 
 if "%DATABASE_TYPE%"=="sql" (
-    powershell -ExecutionPolicy Bypass -File "..\hbwc-handle-migrations.ps1" -projectName %PROJECT_NAME%
+    powershell -ExecutionPolicy Bypass -File "..\hbwc-migrations.ps1" -projectName %PROJECT_NAME%
 
     :: We need to clean and rebuild entire solution after we create custom migrations
     dotnet clean %PROJECT_NAME%.sln
