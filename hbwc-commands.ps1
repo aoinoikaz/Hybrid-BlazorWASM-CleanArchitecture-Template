@@ -328,6 +328,7 @@ namespace $($projectName).Application.Common.Interfaces;
 public interface IPaginationService
 {
     Task<PaginatedList<T>> GetPaginatedDataAsync<T>(
+        string schemaName,
         string tableName,
         string selectColumns,
         int pageNumber,
@@ -382,6 +383,7 @@ public class PaginationService : IPaginationService
     }
 
     public async Task<PaginatedList<T>> GetPaginatedDataAsync<T>(
+            string schemaName,
             string tableName,
             string selectColumns,
             int pageNumber,
@@ -1804,7 +1806,8 @@ public class GetProductsWithPaginationQueryHandler : IRequestHandler<GetProducts
 
     public async Task<PaginatedList<ProductDto>> Handle(GetProductsWithPaginationQuery request, CancellationToken cancellationToken)
     {
-        var products = await _paginationService.GetPaginatedDataAsync<Product>(
+         var products = await _paginationService.GetPaginatedDataAsync<Product>(
+            schemaName: "dbo",
             tableName: "Products",
             selectColumns: "*",
             //whereCondition: "Price > 1.00",
