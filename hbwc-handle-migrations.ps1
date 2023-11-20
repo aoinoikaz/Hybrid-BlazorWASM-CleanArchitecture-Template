@@ -29,7 +29,7 @@ public partial class $specificMigrationName : Migration
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[GenericPaginator]') AND type in (N'P', N'PC'))
 BEGIN
     EXEC('CREATE PROCEDURE [dbo].[GenericPaginator]
-        @SchemaName NVARCHAR(128),
+    @SchemaName NVARCHAR(128),
     @TableName NVARCHAR(128),
     @SelectColumns NVARCHAR(MAX),
     @WhereCondition NVARCHAR(MAX) = NULL,
