@@ -403,6 +403,7 @@ public class PaginationService : IPaginationService
             command.CommandType = CommandType.StoredProcedure;
             command.CommandText = "GenericPaginator";
 
+            command.Parameters.Add(new SqlParameter("@SchemaName", schemaName));
             command.Parameters.Add(new SqlParameter("@TableName", tableName));
             command.Parameters.Add(new SqlParameter("@SelectColumns", selectColumns));
             command.Parameters.Add(new SqlParameter("@WhereCondition", whereCondition ?? (object)DBNull.Value));
